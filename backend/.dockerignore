@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+bin/
+tmp/
+*.exe
+*.test
+*.out
+coverage/
+Dockerfile
+README.md

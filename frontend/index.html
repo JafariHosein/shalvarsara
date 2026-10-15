@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fa" dir="rtl" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2563EB" />
+    <meta
+      name="description"
+      content="شلوارسرا — فروشگاه اینترنتی شلوار؛ خرید آنلاین شلوار جین، پارچه‌ای، کتان، کارگو و اسلش مردانه، زنانه و بچگانه با ارسال سریع."
+    />
+    <title>شلوارسرا | فروشگاه اینترنتی شلوار</title>
+
+    <!-- Apply the stored theme before first paint so there is no flash of the
+         wrong colour scheme. No stored choice means "follow the system". -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var dark = !stored || stored === "system" ? prefersDark : stored === "dark";
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {
+          /* ignore */
+        }
+      })();
+    </script>
+  </head>
+  <body class="h-full bg-background text-foreground antialiased">
+    <div id="root" class="flex min-h-full flex-col"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens: white-and-blue theme with a full dark mode.
+ * Colours are HSL channels (no `hsl()` wrapper) consumed by Tailwind as
+ * `hsl(var(--token))`. Never hardcode palette classes in components.
+ */
+@layer base {
+  :root {
+    --background: 210 40% 99%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 221 83% 53%; /* #2563EB */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 214 32% 95%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 214 95% 93%;
+    --accent-foreground: 221 83% 40%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.75rem;
+
+    --chart-1: 221 83% 53%;
+    --chart-2: 199 89% 48%;
+    --chart-3: 262 83% 58%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 32 95% 55%;
+  }
+
+  .dark {
+    --background: 220 49% 8%; /* #0B1220 */
+    --foreground: 210 40% 96%;
+
+    --card: 220 40% 11%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 220 40% 11%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 220 49% 8%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 50% 22%;
+    --accent-foreground: 210 40% 96%;
+
+    --destructive: 0 63% 47%;
+    --destructive-foreground: 210 40% 96%;
+
+    --success: 142 60% 45%;
+    --success-foreground: 220 49% 8%;
+
+    --warning: 32 90% 55%;
+    --warning-foreground: 220 49% 8%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 217 91% 60%;
+
+    --chart-1: 217 91% 60%;
+    --chart-2: 199 89% 55%;
+    --chart-3: 262 83% 68%;
+    --chart-4: 142 60% 50%;
+    --chart-5: 32 90% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply h-full;
+    /* Persian text needs slightly looser leading than Latin. */
+    line-height: 1.7;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  p,
+  li {
+    @apply leading-8;
+  }
+
+  /* Persian must never be letter-spaced: it breaks joined letterforms. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold leading-tight;
+    letter-spacing: normal;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Hide the number-input spinners; quantity is controlled by buttons. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}

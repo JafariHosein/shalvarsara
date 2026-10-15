@@ -1,0 +1,87 @@
+import * as React from "react";
+import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
+import { toFaDigits } from "@/lib/format";
+
+const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
+  <nav
+    role="navigation"
+    aria-label="صفحه‌بندی"
+    className={cn("mx-auto flex w-full justify-center", className)}
+    {...props}
+  />
+);
+Pagination.displayName = "Pagination";
+
+const PaginationContent = React.forwardRef<HTMLUListElement, React.ComponentProps<"ul">>(
+  ({ className, ...props }, ref) => (
+    <ul ref={ref} className={cn("flex flex-row items-center gap-1", className)} {...props} />
+  ),
+);
+PaginationContent.displayName = "PaginationContent";
+
+const PaginationItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li">>(({ className, ...props }, ref) => (
+  <li ref={ref} className={cn("", className)} {...props} />
+));
+PaginationItem.displayName = "PaginationItem";
+
+type PaginationLinkProps = {
+  isActive?: boolean;
+} & React.ComponentProps<"a">;
+
+const PaginationLink = ({ className, isActive, ...props }: PaginationLinkProps) => (
+  <a
+    aria-current={isActive ? "page" : undefined}
+    className={cn(
+      buttonVariants({ variant: isActive ? "default" : "ghost", size: "icon" }),
+      "cursor-pointer",
+      className,
+    )}
+    {...props}
+  />
+);
+PaginationLink.displayName = "PaginationLink";
+
+const PaginationPrevious = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => (
+  <PaginationLink aria-label="صفحه قبل" className={cn("gap-1 px-2.5", className)} {...props}>
+    {/* "Previous" is backwards: it points to the start of the line, which is the
+        right edge in RTL — so the LTR glyph is mirrored. */}
+    <ChevronLeft className="size-4 rtl:-scale-x-100" />
+    <span className="hidden sm:inline">قبلی</span>
+  </PaginationLink>
+);
+PaginationPrevious.displayName = "PaginationPrevious";
+
+const PaginationNext = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => (
+  <PaginationLink aria-label="صفحه بعد" className={cn("gap-1 px-2.5", className)} {...props}>
+    <span className="hidden sm:inline">بعدی</span>
+    <ChevronRight className="size-4 rtl:-scale-x-100" />
+  </PaginationLink>
+);
+PaginationNext.displayName = "PaginationNext";
+
+const PaginationEllipsis = ({ className, ...props }: React.ComponentProps<"span">) => (
+  <span aria-hidden className={cn("flex size-10 items-center justify-center", className)} {...props}>
+    <MoreHorizontal className="size-4" />
+    <span className="sr-only">صفحات بیشتر</span>
+  </span>
+);
+PaginationEllipsis.displayName = "PaginationEllipsis";
+
+/** Page number rendered with Persian digits. */
+const PaginationNumber = ({ page, ...props }: { page: number } & PaginationLinkProps) => (
+  <PaginationLink {...props}>{toFaDigits(page)}</PaginationLink>
+);
+
+export {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationNumber,
+};

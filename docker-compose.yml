@@ -1,0 +1,56 @@
+name: shalvarsara
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: shalvarsara-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shalvarsara}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shalvarsara}
+      POSTGRES_DB: ${POSTGRES_DB:-shalvarsara}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shalvarsara} -d ${POSTGRES_DB:-shalvarsara}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shalvarsara-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-shalvarsara}:${POSTGRES_PASSWORD:-shalvarsara}@db:5432/${POSTGRES_DB:-shalvarsara}?sslmode=disable
+      RUN_MIGRATIONS: "true"
+      SEED_ON_START: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+    container_name: shalvarsara-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:

@@ -1,0 +1,44 @@
+# ---- Node / frontend ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+coverage/
+.eslintcache
+
+# ---- Go / backend ----
+backend/bin/
+backend/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# ---- Env / secrets ----
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---- Editors / OS ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs / uploads ----
+*.log
+logs/
+backend/uploads/
+frontend/uploads/
+
+# ---- OpenCode local state ----
+.opencode/.cache/
