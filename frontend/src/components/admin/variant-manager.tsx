@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/admin/confirm-dialog";
 import { useCreateVariant, useDeleteVariant, useUpdateVariant } from "@/hooks/use-admin";
@@ -258,9 +259,9 @@ export function VariantManager({ product }: { product: Product }) {
                 name="extraPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>اختلاف قیمت (تومان)</FormLabel>
+                    <FormLabel>اختلاف قیمت</FormLabel>
                     <FormControl>
-                      <Input {...field} inputMode="numeric" placeholder="۰" />
+                      <MoneyInput {...field} placeholder="۰" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

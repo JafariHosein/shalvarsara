@@ -16,6 +16,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -381,7 +382,7 @@ export function AdminProductForm() {
                       <FormItem>
                         <FormLabel>قیمت</FormLabel>
                         <FormControl>
-                          <Input {...field} inputMode="numeric" placeholder="۸۹۰۰۰۰" />
+                          <MoneyInput {...field} placeholder="۱٬۲۵۰٬۰۰۰" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -395,7 +396,7 @@ export function AdminProductForm() {
                       <FormItem>
                         <FormLabel>قیمت با تخفیف</FormLabel>
                         <FormControl>
-                          <Input {...field} inputMode="numeric" placeholder="خالی = بدون تخفیف" />
+                          <MoneyInput {...field} placeholder="خالی = بدون تخفیف" />
                         </FormControl>
                         <FormDescription>برای برداشتن تخفیف، این فیلد را خالی بگذارید.</FormDescription>
                         <FormMessage />

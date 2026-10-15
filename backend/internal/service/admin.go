@@ -24,6 +24,7 @@ type AdminService struct {
 	users      *repository.UserRepository
 	coupons    *repository.CouponRepository
 	stats      *repository.StatsRepository
+	payments   *repository.PaymentRepository
 }
 
 // NewAdminService wires the admin service.
@@ -34,6 +35,7 @@ func NewAdminService(
 	users *repository.UserRepository,
 	coupons *repository.CouponRepository,
 	stats *repository.StatsRepository,
+	payments *repository.PaymentRepository,
 ) *AdminService {
 	return &AdminService{
 		products:   products,
@@ -42,6 +44,7 @@ func NewAdminService(
 		users:      users,
 		coupons:    coupons,
 		stats:      stats,
+		payments:   payments,
 	}
 }
 
@@ -491,6 +494,17 @@ func (s *AdminService) ListOrders(ctx context.Context, f model.AdminOrderFilter)
 // GetOrder returns one order with items, payment and shipment.
 func (s *AdminService) GetOrder(ctx context.Context, id int64) (*model.Order, error) {
 	return s.orders.GetForAdmin(ctx, id)
+}
+
+// ListPayments returns a page of gateway attempts for the transactions screen,
+// newest first. Status is either one of the payment statuses or "all".
+func (s *AdminService) ListPayments(ctx context.Context, f model.AdminPaymentFilter) (model.Page[model.AdminPaymentRow], error) {
+	f.Page, f.Limit = normalizeAdminPaging(f.Page, f.Limit)
+	items, total, err := s.payments.ListForAdmin(ctx, f)
+	if err != nil {
+		return model.Page[model.AdminPaymentRow]{}, err
+	}
+	return model.NewPage(items, f.Page, f.Limit, total), nil
 }
 
 // SetOrderStatus moves an order along the pipeline (rules live in the model).

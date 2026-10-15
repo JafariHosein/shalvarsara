@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminPageHeader } from "@/components/admin/page-header";
-import { TablePagination } from "@/components/admin/table-pagination";
+import { PaginationBar } from "@/components/common/pagination-bar";
 import { useAdminUsers, useUpdateUser } from "@/hooks/use-admin";
 import { formatDate, formatNumber, formatToman } from "@/lib/format";
 import { useAuthStore } from "@/store/auth-store";
@@ -215,7 +215,15 @@ export function AdminUsers() {
                 </TableBody>
               </Table>
 
-              <TablePagination page={data.page} totalPages={data.totalPages} onChange={goToPage} className="mt-6" />
+                            <PaginationBar
+                page={data.page}
+                totalPages={data.totalPages}
+                total={data.total}
+                pageSize={PAGE_SIZE}
+                itemLabel="کاربر"
+                onChange={goToPage}
+                className="mt-6"
+              />
             </div>
           )}
         </CardContent>

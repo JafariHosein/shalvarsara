@@ -22,7 +22,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminPageHeader } from "@/components/admin/page-header";
-import { TablePagination } from "@/components/admin/table-pagination";
+import { PaginationBar } from "@/components/common/pagination-bar";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useAdminCoupons, useCreateCoupon, useUpdateCoupon } from "@/hooks/use-admin";
 import { formatDate, formatNumber, formatToman } from "@/lib/format";
 import { couponSchema, dateInputToISO, digitsToNumber, isoToDateInput, type CouponFormValues } from "@/lib/schemas";
@@ -161,15 +162,17 @@ export function AdminCoupons() {
           >
             <div className="min-w-[16rem] flex-1 space-y-2">
               <Label htmlFor="admin-coupon-q">جست‌وجو</Label>
-              <div className="relative">
-                <Search className="absolute inset-y-0 end-3 my-auto size-4 text-muted-foreground" />
+              {/* The wrapper is the LTR island, not just the input: that keeps the
+                  icon and the input's padding on the same side, so the glyph can
+                  never sit on top of the text. */}
+              <div className="relative" dir="ltr">
+                <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" />
                 <Input
                   id="admin-coupon-q"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="کد تخفیف"
-                  className="pe-9"
-                  dir="ltr"
+                  className="ps-9"
                 />
               </div>
             </div>
@@ -267,7 +270,15 @@ export function AdminCoupons() {
                 </TableBody>
               </Table>
 
-              <TablePagination page={data.page} totalPages={data.totalPages} onChange={goToPage} className="mt-6" />
+              <PaginationBar
+                page={data.page}
+                totalPages={data.totalPages}
+                total={data.total}
+                pageSize={PAGE_SIZE}
+                itemLabel="کد تخفیف"
+                onChange={goToPage}
+                className="mt-6"
+              />
             </div>
           )}
         </CardContent>
@@ -332,9 +343,13 @@ export function AdminCoupons() {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{type === "percent" ? "درصد تخفیف" : "مبلغ تخفیف (تومان)"}</FormLabel>
+                      <FormLabel>{type === "percent" ? "درصد تخفیف" : "مبلغ تخفیف"}</FormLabel>
                       <FormControl>
-                        <Input {...field} inputMode="numeric" placeholder={type === "percent" ? "۱۰" : "۵۰۰۰۰"} />
+                        {type === "percent" ? (
+                          <Input {...field} inputMode="numeric" placeholder="۱۰" />
+                        ) : (
+                          <MoneyInput {...field} placeholder="50000" />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -346,9 +361,9 @@ export function AdminCoupons() {
                   name="minOrder"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>حداقل مبلغ سفارش (تومان)</FormLabel>
+                      <FormLabel>حداقل مبلغ سفارش</FormLabel>
                       <FormControl>
-                        <Input {...field} inputMode="numeric" placeholder="۰" />
+                        <MoneyInput {...field} placeholder="0" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

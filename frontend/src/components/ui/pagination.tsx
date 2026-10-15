@@ -17,14 +17,23 @@ Pagination.displayName = "Pagination";
 
 const PaginationContent = React.forwardRef<HTMLUListElement, React.ComponentProps<"ul">>(
   ({ className, ...props }, ref) => (
-    <ul ref={ref} className={cn("flex flex-row items-center gap-1", className)} {...props} />
+    <ul
+      ref={ref}
+      // Wraps instead of overflowing on 360px screens.
+      className={cn("flex flex-row flex-wrap items-center gap-1.5", className)}
+      {...props}
+    />
   ),
 );
 PaginationContent.displayName = "PaginationContent";
 
-const PaginationItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li">>(({ className, ...props }, ref) => (
-  <li ref={ref} className={cn("", className)} {...props} />
-));
+const PaginationItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li">>(
+  ({ className, ...props }, ref) => (
+    // `leading-none` neutralises the global `li { line-height: 2rem }`, which
+    // otherwise makes each item taller than the 40px control inside it.
+    <li ref={ref} className={cn("leading-none", className)} {...props} />
+  ),
+);
 PaginationItem.displayName = "PaginationItem";
 
 type PaginationLinkProps = {
@@ -35,8 +44,9 @@ const PaginationLink = ({ className, isActive, ...props }: PaginationLinkProps) 
   <a
     aria-current={isActive ? "page" : undefined}
     className={cn(
-      buttonVariants({ variant: isActive ? "default" : "ghost", size: "icon" }),
-      "cursor-pointer",
+      buttonVariants({ variant: isActive ? "default" : "ghost" }),
+      // A fixed square cannot hold "۱۲" plus a label: grow horizontally instead.
+      "h-10 min-w-10 shrink-0 cursor-pointer px-3 tabular-nums leading-none",
       className,
     )}
     {...props}
@@ -45,7 +55,12 @@ const PaginationLink = ({ className, isActive, ...props }: PaginationLinkProps) 
 PaginationLink.displayName = "PaginationLink";
 
 const PaginationPrevious = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink aria-label="صفحه قبل" className={cn("gap-1 px-2.5", className)} {...props}>
+  <PaginationLink
+    aria-label="صفحه قبل"
+    // Icon side gets 2px less padding than the text side (optical balance).
+    className={cn("w-auto gap-1 ps-2.5 pe-3", className)}
+    {...props}
+  >
     {/* "Previous" is backwards: it points to the start of the line, which is the
         right edge in RTL — so the LTR glyph is mirrored. */}
     <ChevronLeft className="size-4 rtl:-scale-x-100" />
@@ -55,7 +70,11 @@ const PaginationPrevious = ({ className, ...props }: React.ComponentProps<typeof
 PaginationPrevious.displayName = "PaginationPrevious";
 
 const PaginationNext = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink aria-label="صفحه بعد" className={cn("gap-1 px-2.5", className)} {...props}>
+  <PaginationLink
+    aria-label="صفحه بعد"
+    className={cn("w-auto gap-1 ps-2.5 pe-3", className)}
+    {...props}
+  >
     <span className="hidden sm:inline">بعدی</span>
     <ChevronRight className="size-4 rtl:-scale-x-100" />
   </PaginationLink>
@@ -63,7 +82,14 @@ const PaginationNext = ({ className, ...props }: React.ComponentProps<typeof Pag
 PaginationNext.displayName = "PaginationNext";
 
 const PaginationEllipsis = ({ className, ...props }: React.ComponentProps<"span">) => (
-  <span aria-hidden className={cn("flex size-10 items-center justify-center", className)} {...props}>
+  <span
+    aria-hidden
+    className={cn(
+      "flex h-10 min-w-10 items-center justify-center leading-none text-muted-foreground",
+      className,
+    )}
+    {...props}
+  >
     <MoreHorizontal className="size-4" />
     <span className="sr-only">صفحات بیشتر</span>
   </span>
@@ -82,6 +108,6 @@ export {
   PaginationItem,
   PaginationLink,
   PaginationNext,
-  PaginationPrevious,
   PaginationNumber,
+  PaginationPrevious,
 };

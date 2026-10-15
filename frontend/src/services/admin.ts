@@ -4,6 +4,8 @@ import type {
   AdminImageInput,
   AdminOrderQuery,
   AdminOrderSummary,
+  AdminPaymentQuery,
+  AdminPaymentRow,
   AdminProductInput,
   AdminProductQuery,
   AdminStats,
@@ -127,6 +129,20 @@ export const adminService = {
   /** PATCH /admin/users/:id */
   updateUser: (id: number, body: { isActive?: boolean; role?: "customer" | "admin"; name?: string; phone?: string }) =>
     http.patch<User>(`/admin/users/${id}`, body, { auth: true }),
+
+  // ---- transactions ----
+  /**
+   * GET /admin/payments — one row per gateway attempt, newest first.
+   *
+   * `q` matches the order code, the authority or the bank reference id, so a
+   * customer calling about a payment can be found by any of the three.
+   */
+  payments: (query: AdminPaymentQuery, signal?: AbortSignal) =>
+    http.get<Page<AdminPaymentRow>>("/admin/payments", {
+      auth: true,
+      signal,
+      query: { q: query.q, status: query.status, page: query.page, limit: query.limit },
+    }),
 
   // ---- coupons ----
   /** GET /admin/coupons */

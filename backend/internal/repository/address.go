@@ -20,13 +20,14 @@ func NewAddressRepository(db *database.Pool) *AddressRepository {
 }
 
 const addressColumns = `id, user_id, receiver_name, phone, province, city, postal_code,
-	line1, line2, is_default, created_at, updated_at`
+	line1, line2, latitude, longitude, is_default, created_at, updated_at`
 
 func scanAddress(row pgx.Row) (*model.Address, error) {
 	var a model.Address
 	err := row.Scan(
 		&a.ID, &a.UserID, &a.ReceiverName, &a.Phone, &a.Province, &a.City,
-		&a.PostalCode, &a.Line1, &a.Line2, &a.IsDefault, &a.CreatedAt, &a.UpdatedAt,
+		&a.PostalCode, &a.Line1, &a.Line2, &a.Latitude, &a.Longitude,
+		&a.IsDefault, &a.CreatedAt, &a.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -54,11 +55,12 @@ func (r *AddressRepository) Create(ctx context.Context, a *model.Address) error 
 	}
 
 	const q = `
-		INSERT INTO addresses (user_id, receiver_name, phone, province, city, postal_code, line1, line2, is_default)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		INSERT INTO addresses (user_id, receiver_name, phone, province, city, postal_code, line1, line2, latitude, longitude, is_default)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		RETURNING id, created_at, updated_at`
 	if err := tx.QueryRow(ctx, q,
-		a.UserID, a.ReceiverName, a.Phone, a.Province, a.City, a.PostalCode, a.Line1, a.Line2, a.IsDefault,
+		a.UserID, a.ReceiverName, a.Phone, a.Province, a.City, a.PostalCode, a.Line1, a.Line2,
+		a.Latitude, a.Longitude, a.IsDefault,
 	).Scan(&a.ID, &a.CreatedAt, &a.UpdatedAt); err != nil {
 		return err
 	}
@@ -79,7 +81,8 @@ func (r *AddressRepository) ListByUser(ctx context.Context, userID int64) ([]mod
 		var a model.Address
 		if err := rows.Scan(
 			&a.ID, &a.UserID, &a.ReceiverName, &a.Phone, &a.Province, &a.City,
-			&a.PostalCode, &a.Line1, &a.Line2, &a.IsDefault, &a.CreatedAt, &a.UpdatedAt,
+			&a.PostalCode, &a.Line1, &a.Line2, &a.Latitude, &a.Longitude,
+			&a.IsDefault, &a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -114,12 +117,13 @@ func (r *AddressRepository) Update(ctx context.Context, a *model.Address) (*mode
 	const q = `
 		UPDATE addresses SET
 			receiver_name = $3, phone = $4, province = $5, city = $6,
-			postal_code = $7, line1 = $8, line2 = $9, is_default = $10
+			postal_code = $7, line1 = $8, line2 = $9,
+			latitude = $10, longitude = $11, is_default = $12
 		WHERE id = $1 AND user_id = $2
 		RETURNING ` + addressColumns
 	updated, err := scanAddress(tx.QueryRow(ctx, q,
 		a.ID, a.UserID, a.ReceiverName, a.Phone, a.Province, a.City,
-		a.PostalCode, a.Line1, a.Line2, a.IsDefault))
+		a.PostalCode, a.Line1, a.Line2, a.Latitude, a.Longitude, a.IsDefault))
 	if err != nil {
 		return nil, err
 	}

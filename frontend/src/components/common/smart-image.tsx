@@ -72,7 +72,7 @@ export function SmartImage({ src, alt, className, wrapperClassName, ...props }: 
           onLoad={() => setStatus("loaded")}
           onError={() => setStatus("error")}
           className={cn(
-            "relative size-full object-cover transition-opacity duration-500",
+            "img-outline relative size-full object-cover transition-opacity duration-500",
             status === "loaded" ? "opacity-100" : "opacity-0",
             className,
           )}

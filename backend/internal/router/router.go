@@ -169,6 +169,9 @@ func New(d Deps) *fiber.App {
 	admin.Patch("/orders/:id/status", d.Admin.SetOrderStatus)
 	admin.Post("/orders/:id/shipment", d.Admin.SaveShipment)
 
+	// Payment attempts across every order — one row per gateway call.
+	admin.Get("/payments", d.Admin.ListPayments)
+
 	admin.Get("/users", d.Admin.ListUsers)
 	admin.Patch("/users/:id", d.Admin.UpdateUser)
 

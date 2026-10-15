@@ -15,7 +15,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ConfirmDialog } from "@/components/admin/confirm-dialog";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { OrderStatusBadge } from "@/components/common/order-status-badge";
+import { PaymentStatusBadge } from "@/components/common/payment-status-badge";
 import { useAdminOrder, useSaveShipment, useSetOrderStatus } from "@/hooks/use-admin";
 import { errorMessage } from "@/lib/api";
 import { formatDateTime, formatNumber, formatToman, rialToToman, toFaDigits } from "@/lib/format";
@@ -34,23 +34,10 @@ import {
   ORDER_NEXT_STEPS,
   ORDER_STATUS_LABELS,
   type OrderStatus,
-  type PaymentStatus,
 } from "@/types/api";
 
 /** The happy path, in the order an order walks through it. */
 const TIMELINE: OrderStatus[] = ["pending", "paid", "processing", "shipped", "delivered"];
-
-const PAYMENT_LABELS: Record<PaymentStatus, string> = {
-  initiated: "در انتظار پرداخت",
-  verified: "پرداخت موفق",
-  failed: "پرداخت ناموفق",
-};
-
-const PAYMENT_STYLES: Record<PaymentStatus, string> = {
-  initiated: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  verified: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  failed: "border-destructive/40 bg-destructive/10 text-destructive",
-};
 
 /** A labelled row used in the side panels. */
 function Field({ label, children, ltr = false }: { label: string; children: React.ReactNode; ltr?: boolean }) {
@@ -261,9 +248,7 @@ export function AdminOrderDetail() {
                   <CreditCard className="size-4 text-primary" />
                   پرداخت
                 </CardTitle>
-                <Badge variant="outline" className={PAYMENT_STYLES[order.payment.status]}>
-                  {PAYMENT_LABELS[order.payment.status]}
-                </Badge>
+                <PaymentStatusBadge status={order.payment.status} />
               </CardHeader>
               <CardContent className="space-y-3">
                 <Field label="مبلغ پرداخت">{formatToman(rialToToman(order.payment.amount))}</Field>

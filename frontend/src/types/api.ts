@@ -114,6 +114,9 @@ export interface Address {
   postalCode: string;
   line1: string;
   line2: string;
+  /** Map pin, when the customer picked one. Both are set or both are absent. */
+  latitude?: number;
+  longitude?: number;
   isDefault: boolean;
 }
 
@@ -422,6 +425,18 @@ export interface AdminUserRow {
   lastOrderAt?: string;
 }
 
+/** One row of the admin transactions table: a gateway attempt plus its order. */
+export interface AdminPaymentRow {
+  payment: Payment;
+  orderCode: string;
+  userId?: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  /** Persian label for `payment.status`, already resolved by the backend. */
+  statusFa: string;
+}
+
 export interface BestSeller {
   productId?: number;
   title: string;
@@ -477,6 +492,13 @@ export interface AdminOrderQuery {
 export interface AdminUserQuery {
   q?: string;
   role?: Role | "all";
+  page?: number;
+  limit?: number;
+}
+
+export interface AdminPaymentQuery {
+  q?: string;
+  status?: PaymentStatus | "all";
   page?: number;
   limit?: number;
 }

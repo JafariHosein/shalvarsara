@@ -86,7 +86,7 @@ func run() error {
 	orderService := service.NewOrderService(cartRepo, orderRepo, addressRepo, couponService, cfg.Shipping)
 	paymentService := service.NewPaymentService(orderRepo, paymentRepo, userRepo, gateway, cfg.ZarinPal)
 	adminService := service.NewAdminService(
-		productRepo, categoryRepo, orderRepo, userRepo, couponRepo, statsRepo,
+		productRepo, categoryRepo, orderRepo, userRepo, couponRepo, statsRepo, paymentRepo,
 	)
 
 	app := router.New(router.Deps{

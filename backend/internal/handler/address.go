@@ -30,6 +30,25 @@ type AddressRequest struct {
 	Line1        string `json:"line1"        validate:"required,max=255"`
 	Line2        string `json:"line2"        validate:"omitempty,max=255"`
 	IsDefault    bool   `json:"isDefault"`
+
+	// Optional map pin picked on the address form. Always sent as a pair;
+	// validatePair below rejects half a coordinate, and the database enforces
+	// the same rule with a CHECK constraint.
+	Latitude  *float64 `json:"latitude"  validate:"omitempty,gte=-90,lte=90"`
+	Longitude *float64 `json:"longitude" validate:"omitempty,gte=-180,lte=180"`
+}
+
+// validatePair rejects a payload carrying only one half of a coordinate: a pin
+// without a longitude points nowhere, so the form gets a 422 instead of the
+// database storing a half location.
+func (r AddressRequest) validatePair() error {
+	if (r.Latitude == nil) == (r.Longitude == nil) {
+		return nil
+	}
+	return &model.UserFacingError{
+		Err:  model.ErrValidation,
+		Text: "برای ثبت موقعیت روی نقشه، طول و عرض جغرافیایی باید هر دو فرستاده شوند.",
+	}
 }
 
 // List returns the signed-in user's addresses.
@@ -56,6 +75,9 @@ func (h *AddressHandler) Create(c *fiber.Ctx) error {
 	if err := bind(c, &req); err != nil {
 		return Fail(c, err)
 	}
+	if err := req.validatePair(); err != nil {
+		return Fail(c, err)
+	}
 
 	created, err := h.addresses.Create(c.Context(), user.ID, req.toModel(0))
 	if err != nil {
@@ -77,6 +99,9 @@ func (h *AddressHandler) Update(c *fiber.Ctx) error {
 
 	var req AddressRequest
 	if err := bind(c, &req); err != nil {
+		return Fail(c, err)
+	}
+	if err := req.validatePair(); err != nil {
 		return Fail(c, err)
 	}
 
@@ -113,6 +138,8 @@ func (r AddressRequest) toModel(id int64) *model.Address {
 		PostalCode:   r.PostalCode,
 		Line1:        r.Line1,
 		Line2:        r.Line2,
+		Latitude:     r.Latitude,
+		Longitude:    r.Longitude,
 		IsDefault:    r.IsDefault,
 	}
 }

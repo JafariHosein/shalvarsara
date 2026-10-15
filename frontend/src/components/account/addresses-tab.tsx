@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Loader2, MapPin, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Loader2, MapPin, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,25 +32,42 @@ import { EmptyState } from "@/components/common/empty-state";
 import { toEnDigits } from "@/lib/format";
 import { errorMessage } from "@/lib/api";
 import { addressService, type AddressPayload } from "@/services/addresses";
+import type { LatLng } from "@/components/account/address-map";
 
 const digitsOnly = (value: string) => toEnDigits(value).replace(/[^\d]/g, "");
 
-const addressSchema = z.object({
-  receiverName: z.string().trim().min(2, "نام گیرنده را وارد کنید."),
-  phone: z
-    .string()
-    .transform(digitsOnly)
-    .refine((value) => /^09\d{9}$/.test(value), { message: "شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود." }),
-  province: z.string().trim().min(2, "استان را وارد کنید."),
-  city: z.string().trim().min(2, "شهر را وارد کنید."),
-  postalCode: z
-    .string()
-    .transform(digitsOnly)
-    .refine((value) => /^\d{10}$/.test(value), { message: "کد پستی باید ۱۰ رقم باشد." }),
-  line1: z.string().trim().min(5, "نشانی را کامل‌تر وارد کنید."),
-  line2: z.string().trim().max(255).optional().or(z.literal("")),
-  isDefault: z.boolean(),
-});
+/**
+ * Leaflet is ~160kB and is only useful once the address dialog is open, so the
+ * map is a separate chunk fetched on demand.
+ */
+const AddressMapPicker = React.lazy(() =>
+  import("@/components/account/address-map").then((m) => ({ default: m.AddressMapPicker })),
+);
+
+const addressSchema = z
+  .object({
+    receiverName: z.string().trim().min(2, "نام گیرنده را وارد کنید."),
+    phone: z
+      .string()
+      .transform(digitsOnly)
+      .refine((value) => /^09\d{9}$/.test(value), { message: "شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود." }),
+    province: z.string().trim().min(2, "استان را وارد کنید."),
+    city: z.string().trim().min(2, "شهر را وارد کنید."),
+    postalCode: z
+      .string()
+      .transform(digitsOnly)
+      .refine((value) => /^\d{10}$/.test(value), { message: "کد پستی باید ۱۰ رقم باشد." }),
+    line1: z.string().trim().min(5, "نشانی را کامل‌تر وارد کنید."),
+    line2: z.string().trim().max(255).optional().or(z.literal("")),
+    isDefault: z.boolean(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+  })
+  // A pin is only useful as a pair — the backend refuses the same thing.
+  .refine((value) => (value.latitude == null) === (value.longitude == null), {
+    message: "موقعیت روی نقشه باید هم عرض و هم طول جغرافیایی داشته باشد.",
+    path: ["latitude"],
+  });
 
 type AddressValues = z.infer<typeof addressSchema>;
 
@@ -63,6 +80,8 @@ const EMPTY: AddressValues = {
   line1: "",
   line2: "",
   isDefault: false,
+  latitude: null,
+  longitude: null,
 };
 
 /** Dialog for adding a new shipping address. Also used by the checkout page. */
@@ -211,6 +230,35 @@ export function AddressDialog({ trigger }: { trigger?: React.ReactNode } = {}) {
               )}
             />
 
+            {/* ---------- map pin ---------- */}
+            <div className="rounded-lg border p-3">
+              <div className="mb-3">
+                <p className="text-sm font-medium">موقعیت روی نقشه</p>
+                <p className="text-xs leading-6 text-muted-foreground">
+                  اختیاری، اما توصیه می‌شود: با یک نشان روی نقشه، پیک سریع‌تر جای شما را
+                  پیدا می‌کند.
+                </p>
+              </div>
+              <React.Suspense fallback={<Skeleton className="h-56 w-full rounded-lg" />}>
+                <AddressMapPicker
+                  value={
+                    form.watch("latitude") != null && form.watch("longitude") != null
+                      ? { lat: form.watch("latitude") as number, lng: form.watch("longitude") as number }
+                      : null
+                  }
+                  onChange={(next: LatLng | null) => {
+                    form.setValue("latitude", next ? next.lat : null, { shouldDirty: true });
+                    form.setValue("longitude", next ? next.lng : null, { shouldDirty: true });
+                  }}
+                />
+              </React.Suspense>
+              {form.formState.errors.latitude && (
+                <p className="mt-2 text-xs font-medium text-destructive">
+                  {form.formState.errors.latitude.message}
+                </p>
+              )}
+            </div>
+
             <FormField
               control={form.control}
               name="isDefault"
@@ -311,6 +359,18 @@ export function AddressesTab() {
                   کد پستی: <span dir="ltr">{address.postalCode}</span>
                 </span>
               </div>
+
+              {address.latitude != null && address.longitude != null && (
+                <a
+                  href={`https://www.openstreetmap.org/?mlat=${address.latitude}&mlon=${address.longitude}#map=17/${address.latitude}/${address.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary underline-offset-4 transition-colors duration-150 hover:underline"
+                >
+                  <ExternalLink className="size-3.5" />
+                  مشاهدهٔ نشانی روی نقشه
+                </a>
+              )}
             </article>
           ))}
         </div>

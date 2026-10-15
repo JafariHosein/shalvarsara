@@ -45,6 +45,19 @@
 
     --radius: 0.75rem;
 
+    /*
+     * Elevation built from transparent shadows instead of borders, so surfaces
+     * keep working on any background. The first layer is the ring that replaces
+     * the 1px border; the second and third add lift and ambient depth.
+     * The ring is pure black/white on purpose — a tinted ring reads as dirt.
+     */
+    --shadow-border:
+      0 0 0 1px hsl(0 0% 0% / 0.06), 0 1px 2px -1px hsl(0 0% 0% / 0.06),
+      0 2px 4px 0 hsl(0 0% 0% / 0.04);
+    --shadow-border-hover:
+      0 0 0 1px hsl(0 0% 0% / 0.08), 0 1px 2px -1px hsl(0 0% 0% / 0.08),
+      0 4px 12px -2px hsl(0 0% 0% / 0.08);
+
     --chart-1: 221 83% 53%;
     --chart-2: 199 89% 48%;
     --chart-3: 262 83% 58%;
@@ -92,6 +105,10 @@
     --chart-3: 262 83% 68%;
     --chart-4: 142 60% 50%;
     --chart-5: 32 90% 60%;
+
+    /* On dark surfaces layered depth is invisible; a single white ring reads best. */
+    --shadow-border: 0 0 0 1px hsl(0 0% 100% / 0.08);
+    --shadow-border-hover: 0 0 0 1px hsl(0 0% 100% / 0.14);
   }
 }
 
@@ -104,6 +121,17 @@
     @apply h-full;
     /* Persian text needs slightly looser leading than Latin. */
     line-height: 1.7;
+  }
+
+  /* Headings balance their lines; short body copy avoids a dangling last word. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 
   body {
@@ -142,7 +170,50 @@
   }
 }
 
+@layer components {
+  /*
+   * A card surface whose depth comes from a shadow rather than a border, so it
+   * adapts to whatever is behind it. Nested controls should use a radius of
+   * `--radius` minus the padding (concentric radii).
+   */
+  .surface {
+    @apply rounded-xl bg-card;
+    box-shadow: var(--shadow-border);
+    transition-property: box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
+  }
+
+  .surface-hover:hover {
+    box-shadow: var(--shadow-border-hover);
+  }
+}
+
 @layer utilities {
+  /* A hairline, layout-neutral edge around images. Neutral by design. */
+  .img-outline {
+    outline: 1px solid hsl(0 0% 0% / 0.1);
+    outline-offset: -1px;
+  }
+
+  .dark .img-outline {
+    outline-color: hsl(0 0% 100% / 0.1);
+  }
+
+  /* Horizontal card rails scroll by touch/swipe without a visible bar. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Numbers that change under the user (prices, counters, timers). */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
   /* Hide the number-input spinners; quantity is controlled by buttons. */
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {

@@ -281,6 +281,26 @@ func (h *AdminHandler) ListOrders(c *fiber.Ctx) error {
 	return OK(c, page)
 }
 
+// ---- transactions ----
+
+// ListPayments returns a page of payment attempts across every order.
+//
+// Query parameters: q (order code, authority or reference id), status
+// (initiated, verified, failed or all), page, limit.
+func (h *AdminHandler) ListPayments(c *fiber.Ctx) error {
+	filter := model.AdminPaymentFilter{
+		Query:  queryString(c, "q"),
+		Status: queryString(c, "status"),
+		Page:   queryInt(c, "page", 1),
+		Limit:  queryInt(c, "limit", 20),
+	}
+	page, err := h.admin.ListPayments(c.Context(), filter)
+	if err != nil {
+		return Fail(c, err)
+	}
+	return OK(c, page)
+}
+
 // GetOrder returns one order with its lines, payment and shipment.
 func (h *AdminHandler) GetOrder(c *fiber.Ctx) error {
 	id, err := paramID(c)

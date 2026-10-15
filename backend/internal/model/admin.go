@@ -116,6 +116,36 @@ func CanTransition(from, to string) bool {
 	}
 }
 
+// ---------- payments ----------
+
+// AdminPaymentFilter carries the supported transaction-list parameters.
+type AdminPaymentFilter struct {
+	Query  string // matches the order code, the authority or the reference id
+	Status string // initiated | verified | failed | all
+	Page   int
+	Limit  int
+}
+
+// Offset converts page/limit into a SQL OFFSET.
+func (f AdminPaymentFilter) Offset() int {
+	if f.Page < 1 {
+		return 0
+	}
+	return (f.Page - 1) * f.Limit
+}
+
+// AdminPaymentRow is one gateway attempt as the transactions table shows it:
+// the payment itself, the order it belongs to and who placed that order.
+type AdminPaymentRow struct {
+	Payment   Payment `json:"payment"`
+	OrderCode string  `json:"orderCode"`
+	UserID    *int64  `json:"userId,omitempty"`
+	Name      string  `json:"customerName"`
+	Email     string  `json:"customerEmail"`
+	Phone     string  `json:"customerPhone"`
+	StatusFa  string  `json:"statusFa"`
+}
+
 // ---------- users ----------
 
 // AdminUserFilter carries the supported admin user-list parameters.

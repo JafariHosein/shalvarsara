@@ -1,12 +1,13 @@
 import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, ChevronRight, Minus, Plus, ShoppingBag, Truck } from "lucide-react";
+import { Check, ChevronRight, CreditCard, Headset, Minus, Plus, ShoppingBag, ShieldCheck, Truck, Undo2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Accordion,
   AccordionContent,
@@ -20,7 +21,7 @@ import { ProductGrid } from "@/components/product/product-grid";
 import { RatingStars } from "@/components/product/rating-stars";
 import { useProduct, useRelatedProducts } from "@/hooks/use-products";
 import { useCart } from "@/hooks/use-cart";
-import { formatNumber, toFaDigits } from "@/lib/format";
+import { formatNumber, toEnDigits, toFaDigits } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { discountPercent, variantColors, variantSizes, type ProductVariant } from "@/types/api";
 
@@ -359,6 +360,23 @@ export function ProductDetailPage() {
             ارسال از تهران — سفارش‌های تا ساعت ۱۴ امروز، فردا تحویل داده می‌شوند.
           </div>
 
+          {/* Trust row: icon + two short lines, sized to sit under the buy box. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { icon: ShieldCheck, title: "ضمانت اصالت", text: "کالای اصل و فاکتوردار" },
+              { icon: Undo2, title: "۷ روز بازگشت", text: "بدون قید و شرط" },
+              { icon: CreditCard, title: "پرداخت امن", text: "درگاه زرین‌پال" },
+              { icon: Headset, title: "پشتیبانی", text: "۹ تا ۱۸ هر روز" },
+            ].map(({ icon: Icon, title, text }) => (
+              <div key={title} className="rounded-lg bg-muted/40 p-3">
+                {/* 1.75 stroke: matches the small, regular-weight label beside it. */}
+                <Icon className="size-4 text-primary" strokeWidth={1.75} />
+                <p className="mt-2 text-xs font-semibold">{title}</p>
+                <p className="text-[11px] leading-5 text-muted-foreground text-pretty">{text}</p>
+              </div>
+            ))}
+          </div>
+
           {/* details */}
           <Accordion type="single" collapsible defaultValue="description" className="rounded-lg border bg-card px-4">
             <AccordionItem value="description">
@@ -371,6 +389,68 @@ export function ProductDetailPage() {
                     .map((paragraph) => (
                       <p key={paragraph}>{toFaDigits(paragraph)}</p>
                     ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="size-guide">
+              <AccordionTrigger>راهنمای انتخاب سایز</AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4">
+                  <p className="text-sm leading-7 text-muted-foreground text-pretty">
+                    سایز شلوار همان دور کمر بر حسب اینچ است. اگر دور کمر خود را با متری
+                    می‌شناسید، عدد مقابل سایز را ببینید؛ سایز ۳۲ یعنی دور کمر نزدیک به
+                    ۸۱ سانتی‌متر. اگر بین دو سایز مرزی هستید، سایز بزرگ‌تر را انتخاب
+                    کنید — شلوار تن‌شده کمتر از شلوار گشاد جذاب به نظر می‌رسد.
+                  </p>
+
+                  {sizes.length > 0 && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24">سایز</TableHead>
+                          <TableHead>دور کمر (سانتی‌متر)</TableHead>
+                          <TableHead>قد پا / دم پا</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sizes.map((option) => {
+                          const inches = Number(toEnDigits(option).replace(/\D/g, ""));
+                          const waist = Number.isFinite(inches) && inches > 0 ? Math.round(inches * 2.54) : null;
+                          const stock = product.variants
+                            .filter((variant) => variant.size === option)
+                            .reduce((sum, variant) => sum + variant.stock, 0);
+                          return (
+                            <TableRow key={option}>
+                              <TableCell className="font-bold tnum">{toFaDigits(option)}</TableCell>
+                              <TableCell className="tnum">
+                                {waist != null ? `${toFaDigits(waist)}` : "—"}
+                                {waist != null && <span className="ms-1 text-xs text-muted-foreground">سانتی‌متر</span>}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {stock > 0 ? "بسته به مدل" : "—"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-1 size-4 shrink-0 text-success" />
+                      دور کمر را روی لباس راحت (نه روی بدن) اندازه بگیرید.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-1 size-4 shrink-0 text-success" />
+                      شلوار بگ و اسکینی معمولاً کش دارند و یک سایز بالا هم تن می‌خورند.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-1 size-4 shrink-0 text-success" />
+                      اگر سایز شما ناموجود بود، از پشتیبانی بخواهید هنگام موجود شدن خبرتان کنیم.
+                    </li>
+                  </ul>
                 </div>
               </AccordionContent>
             </AccordionItem>

@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/admin/confirm-dialog";
 import { AdminPageHeader } from "@/components/admin/page-header";
-import { TablePagination } from "@/components/admin/table-pagination";
+import { PaginationBar } from "@/components/common/pagination-bar";
 import { SmartImage } from "@/components/common/smart-image";
 import { Price } from "@/components/product/price";
 import { useAdminCategories, useAdminProducts, useDeleteProduct, useUpdateProductFlags } from "@/hooks/use-admin";
@@ -297,7 +297,15 @@ export function AdminProducts() {
                 </TableBody>
               </Table>
 
-              <TablePagination page={data.page} totalPages={data.totalPages} onChange={goToPage} className="mt-6" />
+                            <PaginationBar
+                page={data.page}
+                totalPages={data.totalPages}
+                total={data.total}
+                pageSize={PAGE_SIZE}
+                itemLabel="محصول"
+                onChange={goToPage}
+                className="mt-6"
+              />
             </div>
           )}
         </CardContent>

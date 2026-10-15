@@ -1,13 +1,13 @@
 import { RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCategories } from "@/hooks/use-categories";
-import { toEnDigits } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { SORT_LABELS, type ProductSort } from "@/types/api";
 
 export interface ProductFilters {
@@ -39,12 +39,6 @@ const ALL = "__all__";
 /** Sidebar filters for the catalogue page. All state lives in the URL. */
 export function FilterPanel({ value, onChange, onReset }: FilterPanelProps) {
   const { data: categories } = useCategories();
-
-  function handlePrice(field: "minPrice" | "maxPrice", raw: string) {
-    // Accept Persian digits and strip grouping separators before storing.
-    const normalized = toEnDigits(raw).replace(/[^\d]/g, "");
-    onChange({ [field]: normalized });
-  }
 
   return (
     <div className="space-y-6">
@@ -99,22 +93,29 @@ export function FilterPanel({ value, onChange, onReset }: FilterPanelProps) {
       <div className="space-y-2">
         <Label>محدوده قیمت (تومان)</Label>
         <div className="flex items-center gap-2">
-          <Input
-            inputMode="numeric"
+          <MoneyInput
+            suffix={null}
             placeholder="از"
             aria-label="حداقل قیمت"
             value={value.minPrice}
-            onChange={(event) => handlePrice("minPrice", event.target.value)}
+            onChange={(next) => onChange({ minPrice: next })}
           />
-          <span className="text-muted-foreground">تا</span>
-          <Input
-            inputMode="numeric"
+          <span className="text-xs text-muted-foreground">تا</span>
+          <MoneyInput
+            suffix={null}
             placeholder="تا"
             aria-label="حداکثر قیمت"
             value={value.maxPrice}
-            onChange={(event) => handlePrice("maxPrice", event.target.value)}
+            onChange={(next) => onChange({ maxPrice: next })}
           />
         </div>
+        {(value.minPrice || value.maxPrice) && (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {value.minPrice ? `از ${formatNumber(Number(value.minPrice))} تومان` : "بدون کف قیمت"}
+            {" — "}
+            {value.maxPrice ? `تا ${formatNumber(Number(value.maxPrice))} تومان` : "بدون سقف قیمت"}
+          </p>
+        )}
       </div>
 
       <Separator />

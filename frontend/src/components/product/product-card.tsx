@@ -27,7 +27,9 @@ export function ProductCard({ product, className, variant = "default" }: Product
   return (
     <article
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-md focus-within:shadow-md",
+        // Depth comes from a shadow rather than a border, so the tile sits on
+        // any background; the hover ring is one step stronger, not a new colour.
+        "group surface surface-hover relative flex flex-col overflow-hidden focus-within:shadow-[var(--shadow-border-hover)]",
         className,
       )}
     >
@@ -75,7 +77,7 @@ export function ProductCard({ product, className, variant = "default" }: Product
             {sizes.map((size) => (
               <span
                 key={size}
-                className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                className="rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground tnum"
               >
                 {toFaDigits(size)}
               </span>
@@ -94,7 +96,7 @@ export function ProductCard({ product, className, variant = "default" }: Product
 /** Skeleton shown while a page of products loads. */
 export function ProductCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="surface overflow-hidden">
       <div className="aspect-[4/5] animate-pulse bg-muted" />
       <div className="space-y-2 p-3.5">
         <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />

@@ -22,10 +22,13 @@ export function UserMenu() {
 
   if (!isAuthenticated) {
     return (
+      // Below `sm` the label is dropped: on a 360px phone the header has to fit
+      // the hamburger, the logo, the cart and the theme switch beside it.
       <Button asChild variant="outline" size="sm" className="gap-2">
         <Link to="/login">
           <UserIcon className="size-4" />
-          ورود / ثبت‌نام
+          <span className="hidden sm:inline">ورود / ثبت‌نام</span>
+          <span className="sr-only sm:hidden">ورود یا ثبت‌نام</span>
         </Link>
       </Button>
     );

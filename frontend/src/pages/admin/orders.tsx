@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminPageHeader } from "@/components/admin/page-header";
-import { TablePagination } from "@/components/admin/table-pagination";
+import { PaginationBar } from "@/components/common/pagination-bar";
 import { OrderStatusBadge } from "@/components/common/order-status-badge";
 import { useAdminOrders } from "@/hooks/use-admin";
 import { formatDateTime, formatNumber, formatToman } from "@/lib/format";
@@ -205,7 +205,15 @@ export function AdminOrders() {
                 </TableBody>
               </Table>
 
-              <TablePagination page={data.page} totalPages={data.totalPages} onChange={goToPage} className="mt-6" />
+                            <PaginationBar
+                page={data.page}
+                totalPages={data.totalPages}
+                total={data.total}
+                pageSize={PAGE_SIZE}
+                itemLabel="سفارش"
+                onChange={goToPage}
+                className="mt-6"
+              />
             </div>
           )}
         </CardContent>

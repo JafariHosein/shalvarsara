@@ -9,6 +9,9 @@ export interface AddressPayload {
   postalCode: string;
   line1: string;
   line2?: string;
+  /** Map pin. Both are present or both omitted; the backend enforces the pair. */
+  latitude?: number;
+  longitude?: number;
   isDefault: boolean;
 }
 

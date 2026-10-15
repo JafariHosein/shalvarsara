@@ -7,6 +7,7 @@ import type {
   AdminCategoryInput,
   AdminImageInput,
   AdminOrderQuery,
+  AdminPaymentQuery,
   AdminProductInput,
   AdminProductQuery,
   AdminUserQuery,
@@ -35,6 +36,7 @@ const {
   order,
   setOrderStatus,
   saveShipment,
+  payments,
   users,
   updateUser,
   coupons,
@@ -84,6 +86,21 @@ export function useAdminOrder(id: number | undefined) {
     queryKey: ["admin", "order", id],
     queryFn: ({ signal }) => order(id as number, signal),
     enabled: typeof id === "number" && id > 0,
+  });
+}
+
+/**
+ * A page of gateway attempts for the transactions screen.
+ *
+ * Refetches whenever the poll tick fires: a payment can be confirmed at the
+ * gateway seconds after the customer is sent back, so a cached "در انتظار
+ * پرداخت" row would otherwise look stale to the admin.
+ */
+export function useAdminPayments(query: AdminPaymentQuery) {
+  return useQuery({
+    queryKey: ["admin", "payments", query],
+    queryFn: ({ signal }) => payments(query, signal),
+    refetchInterval: 30_000,
   });
 }
 

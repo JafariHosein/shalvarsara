@@ -32,6 +32,8 @@ const AdminOrderDetail = lazy(() =>
 );
 const AdminUsers = lazy(() => import("@/pages/admin/users").then((m) => ({ default: m.AdminUsers })));
 const AdminCoupons = lazy(() => import("@/pages/admin/coupons").then((m) => ({ default: m.AdminCoupons })));
+const AdminPayments = lazy(() => import("@/pages/admin/payments").then((m) => ({ default: m.AdminPayments })));
+const AdminSms = lazy(() => import("@/pages/admin/sms").then((m) => ({ default: m.AdminSms })));
 const NotFoundPage = lazy(() => import("@/pages/not-found").then((m) => ({ default: m.NotFoundPage })));
 
 /** Application routes. `SiteLayout` owns the Suspense boundary for lazy pages. */
@@ -114,6 +116,8 @@ export function App() {
           <Route path="orders/:id" element={<AdminOrderDetail />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="coupons" element={<AdminCoupons />} />
+          <Route path="payments" element={<AdminPayments />} />
+          <Route path="sms" element={<AdminSms />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 

@@ -27,14 +27,14 @@ export function Price({ price, discountPrice, size = "md", className }: PricePro
   const sizes = SIZES[size];
 
   return (
-    <div className={cn("flex flex-wrap items-baseline gap-2", className)}>
+    <div className={cn("flex flex-wrap items-baseline gap-2 tabular-nums", className)}>
       {hasDiscount && (
         <span
           className={cn("text-muted-foreground line-through", sizes.original)}
           // Screen readers should not announce the old price as the current one.
           aria-hidden="true"
         >
-          {formatNumber(price)}
+          {formatToman(price)}
         </span>
       )}
       <span className={cn("font-bold text-foreground", sizes.final)}>

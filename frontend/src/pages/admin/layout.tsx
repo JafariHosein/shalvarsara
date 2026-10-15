@@ -1,8 +1,10 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 import {
   Boxes,
+  CreditCard,
   FolderTree,
   LayoutDashboard,
+  MessageSquareText,
   Receipt,
   ShieldCheck,
   Store,
@@ -11,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
@@ -21,6 +24,8 @@ interface NavEntry {
   icon: LucideIcon;
   /** Only the index route needs an exact match. */
   end?: boolean;
+  /** Marks a section that is planned but not built yet. */
+  soon?: boolean;
 }
 
 const NAV: NavEntry[] = [
@@ -28,8 +33,10 @@ const NAV: NavEntry[] = [
   { to: "/admin/products", label: "محصولات", icon: Boxes },
   { to: "/admin/categories", label: "دسته‌بندی‌ها", icon: FolderTree },
   { to: "/admin/orders", label: "سفارش‌ها", icon: Receipt },
+  { to: "/admin/payments", label: "تراکنش‌ها", icon: CreditCard },
   { to: "/admin/users", label: "کاربران", icon: Users },
   { to: "/admin/coupons", label: "کدهای تخفیف", icon: TicketPercent },
+  { to: "/admin/sms", label: "پنل پیامکی", icon: MessageSquareText, soon: true },
 ];
 
 /**
@@ -68,7 +75,7 @@ export function AdminLayout() {
             aria-label="بخش‌های پنل مدیریت"
             className="grid grid-cols-2 gap-1.5 rounded-xl border bg-card p-2 sm:grid-cols-3 lg:grid-cols-1"
           >
-            {NAV.map(({ to, label, icon: Icon, end }) => (
+            {NAV.map(({ to, label, icon: Icon, end, soon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -84,7 +91,14 @@ export function AdminLayout() {
                 }
               >
                 <Icon className="size-4 shrink-0" />
-                <span className="truncate">{label}</span>
+                {/* `min-w-0` + `truncate` keep a long label from shoving the
+                    «به‌زودی» tag out of the row. */}
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {soon && (
+                  <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px] font-medium">
+                    به‌زودی
+                  </Badge>
+                )}
               </NavLink>
             ))}
           </nav>
