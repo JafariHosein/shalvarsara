@@ -39,7 +39,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
           inputMode="numeric"
           autoComplete="off"
           // `ps-*` reserves room for the unit so long numbers never slide under it.
-          className={cn("text-end tabular-nums", suffix ? "ps-16" : undefined, className)}
+          className={cn("text-end", suffix ? "ps-16" : undefined, className)}
           value={display}
           onChange={(event) => onChange(toEnDigits(event.target.value).replace(/\D/g, ""))}
         />

@@ -218,7 +218,7 @@ export function AddressMapPicker({ value, onChange, className }: AddressMapPicke
             id="map-lat"
             dir="ltr"
             inputMode="decimal"
-            className="text-end text-sm tabular-nums"
+            className="text-end text-sm"
             placeholder="35.6892"
             value={value ? fmt(value.lat) : ""}
             onChange={(event) => {
@@ -239,7 +239,7 @@ export function AddressMapPicker({ value, onChange, className }: AddressMapPicke
             id="map-lng"
             dir="ltr"
             inputMode="decimal"
-            className="text-end text-sm tabular-nums"
+            className="text-end text-sm"
             placeholder="51.3890"
             value={value ? fmt(value.lng) : ""}
             onChange={(event) => {

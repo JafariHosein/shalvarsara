@@ -46,7 +46,7 @@ const PaginationLink = ({ className, isActive, ...props }: PaginationLinkProps) 
     className={cn(
       buttonVariants({ variant: isActive ? "default" : "ghost" }),
       // A fixed square cannot hold "۱۲" plus a label: grow horizontally instead.
-      "h-10 min-w-10 shrink-0 cursor-pointer px-3 tabular-nums leading-none",
+      "h-10 min-w-10 shrink-0 cursor-pointer px-3 leading-none",
       className,
     )}
     {...props}

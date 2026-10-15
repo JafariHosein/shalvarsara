@@ -182,7 +182,7 @@ export function AdminPayments() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap font-semibold tabular-nums">
+                      <TableCell className="whitespace-nowrap font-semibold">
                         {formatToman(rialToToman(row.payment.amount))}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground" dir="ltr">

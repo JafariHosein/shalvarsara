@@ -77,7 +77,7 @@ export function ProductCard({ product, className, variant = "default" }: Product
             {sizes.map((size) => (
               <span
                 key={size}
-                className="rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground tnum"
+                className="rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
               >
                 {toFaDigits(size)}
               </span>

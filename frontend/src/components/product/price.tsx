@@ -27,7 +27,7 @@ export function Price({ price, discountPrice, size = "md", className }: PricePro
   const sizes = SIZES[size];
 
   return (
-    <div className={cn("flex flex-wrap items-baseline gap-2 tabular-nums", className)}>
+    <div className={cn("flex flex-wrap items-baseline gap-2", className)}>
       {hasDiscount && (
         <span
           className={cn("text-muted-foreground line-through", sizes.original)}

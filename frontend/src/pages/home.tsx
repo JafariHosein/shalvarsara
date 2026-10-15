@@ -143,10 +143,11 @@ export function HomePage() {
     <div className="pb-4">
       {/* ---------- hero ---------- */}
       <section className="relative overflow-hidden border-b bg-gradient-to-b from-primary/10 via-background to-background">
-        {/* A faint dot grid, not a flat colour: it gives the section texture. */}
+        {/* A faint dot grid, not a flat colour: it gives the section texture.
+            It drifts one tile per minute — motion you notice only if you stop. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:radial-gradient(hsl(var(--foreground)/0.07)_1px,transparent_1px)] [background-size:18px_18px]"
+          className="dot-drift pointer-events-none absolute -inset-[18px] opacity-[0.35] [background-image:radial-gradient(hsl(var(--foreground)/0.07)_1px,transparent_1px)] [background-size:18px_18px]"
         />
         <div
           aria-hidden="true"
@@ -191,7 +192,7 @@ export function HomePage() {
               ].map((stat) => (
                 <div key={stat.label} className="rounded-lg bg-card/60 p-3 text-center shadow-[var(--shadow-border)]">
                   <dt className="text-xs text-muted-foreground">{stat.label}</dt>
-                  <dd className="mt-1 text-lg font-bold text-primary tnum">{stat.value}</dd>
+                  <dd className="mt-1 text-lg font-bold text-primary">{stat.value}</dd>
                 </div>
               ))}
             </dl>
@@ -229,7 +230,7 @@ export function HomePage() {
               <div className="space-y-4">
                 <div className="rounded-xl bg-primary p-4 text-primary-foreground shadow-[var(--shadow-border)]">
                   <p className="text-xs opacity-80">تخفیف هفتگی</p>
-                  <p className="mt-1 text-3xl font-black tnum">۳۰٪</p>
+                  <p className="mt-1 text-3xl font-black">۳۰٪</p>
                   <p className="mt-1 text-xs opacity-90 text-pretty">روی مدل‌های منتخب جین</p>
                 </div>
                 {featured.data?.items[1] && (
@@ -255,7 +256,7 @@ export function HomePage() {
       <section id="services" className="container scroll-mt-28 py-12">
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {SERVICES.map(({ icon: Icon, title, text }) => (
-            <li key={title} className="flex items-start gap-3 rounded-lg bg-muted/40 p-4">
+            <li key={title} className="flex items-center gap-3 rounded-lg bg-muted/40 p-4">
               <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
                 <Icon className="size-5" strokeWidth={1.75} />
               </span>
@@ -290,7 +291,7 @@ export function HomePage() {
                   <p className="text-lg font-bold transition-colors duration-150 group-hover:text-primary">
                     {category.name}
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground tnum">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {formatNumber(category.productCount)} محصول موجود
                   </p>
                 </div>
@@ -365,8 +366,8 @@ export function HomePage() {
               <tbody>
                 {SIZE_GUIDE.map((row) => (
                   <tr key={row.size} className="border-t">
-                    <td className="px-4 py-3 font-bold tnum">{row.size}</td>
-                    <td className="px-4 py-3 tnum">{row.waist}</td>
+                    <td className="px-4 py-3 font-bold">{row.size}</td>
+                    <td className="px-4 py-3">{row.waist}</td>
                     <td className="px-4 py-3 text-muted-foreground">{row.fit}</td>
                   </tr>
                 ))}

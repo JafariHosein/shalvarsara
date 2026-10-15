@@ -138,6 +138,43 @@
     @apply bg-background text-foreground antialiased;
   }
 
+  /*
+   * The page background is never a flat fill: three theme-aware colour fields
+   * bleed through from behind the content and drift on a ~50s loop, so a page
+   * that is being read still feels alive. It is a single fixed, pointer-inert
+   * layer animated with transforms only (composited, never repainted), and it
+   * maps onto the chart tokens, so light and dark each get their own intensity.
+   */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: -30% -20%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(closest-side, hsl(var(--chart-1) / 0.18), transparent) 12% 10% / 46rem 46rem
+        no-repeat,
+      radial-gradient(closest-side, hsl(var(--chart-2) / 0.16), transparent) 86% 6% / 34rem 34rem
+        no-repeat,
+      radial-gradient(closest-side, hsl(var(--chart-3) / 0.14), transparent) 68% 86% / 42rem 42rem
+        no-repeat;
+    animation: aura-drift 52s ease-in-out infinite;
+  }
+
+  /* Pan and breathe; the first and last frame match, so pausing is invisible. */
+  @keyframes aura-drift {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(2.2%, -1.6%, 0) scale(1.06);
+    }
+    66% {
+      transform: translate3d(-1.8%, 2%, 0) scale(0.96);
+    }
+  }
+
   p,
   li {
     @apply leading-8;
@@ -209,9 +246,25 @@
     display: none;
   }
 
-  /* Numbers that change under the user (prices, counters, timers). */
-  .tnum {
-    font-variant-numeric: tabular-nums;
+  /*
+   * Numbers are never letter-spaced and never tabular: Vazirmatn's tabular
+   * figures widen every digit and blow up the Persian thousands separator
+   * (۲ ٫ ۴۵۷ ٫ ۰۰۰), which reads as a different font. Proportional figures
+   * keep prices and counters compact.
+   */
+
+  /* A dot field that drifts one tile every minute — texture, not motion. */
+  .dot-drift {
+    animation: dot-drift 60s linear infinite;
+  }
+
+  @keyframes dot-drift {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(18px, 18px, 0);
+    }
   }
 
   /* Hide the number-input spinners; quantity is controlled by buttons. */

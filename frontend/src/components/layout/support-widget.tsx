@@ -25,14 +25,17 @@ export function SupportWidget() {
   }, [open]);
 
   return (
-    <div className="pointer-events-none fixed bottom-5 left-5 z-50 print:hidden">
-      <div className="flex flex-col items-start gap-3">
-        {/* ---------- the card ---------- */}
+    <div className="pointer-events-none fixed bottom-4 left-4 z-50 print:hidden sm:bottom-5 sm:left-5">
+      <div className="flex flex-col items-start">
+        {/* ---------- the card ----------
+            Absolutely positioned above the toggle so the collapsed widget is
+            exactly the size of the button: the wrapper is pinned to the
+            physical left edge, and the card floats up from the same edge. */}
         <section
           id="support-panel"
           aria-hidden={!open}
           className={cn(
-            "pointer-events-auto w-[min(20rem,calc(100vw-2.5rem))] origin-bottom-left rounded-2xl bg-card p-4",
+            "pointer-events-auto absolute bottom-[calc(100%+0.75rem)] left-0 w-[min(20rem,calc(100vw-2rem))] origin-bottom-left rounded-2xl bg-card p-4",
             "shadow-[var(--shadow-border),0_10px_30px_-12px_hsl(0_0%_0%/0.25)]",
             "transition-[opacity,transform] duration-200 ease-out",
             open ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-2 scale-95 opacity-0",
@@ -88,7 +91,7 @@ export function SupportWidget() {
               </span>
               <span className="min-w-0">
                 <span className="block text-xs text-muted-foreground">تماس با دفتر</span>
-                <span dir="ltr" className="block truncate font-semibold tabular-nums">
+                <span dir="ltr" className="block truncate font-semibold">
                   {CONTACT_FA.phone}
                 </span>
               </span>
@@ -103,7 +106,7 @@ export function SupportWidget() {
               </span>
               <span className="min-w-0">
                 <span className="block text-xs text-muted-foreground">موبایل و واتساپ</span>
-                <span dir="ltr" className="block truncate font-semibold tabular-nums">
+                <span dir="ltr" className="block truncate font-semibold">
                   {CONTACT_FA.mobile}
                 </span>
               </span>

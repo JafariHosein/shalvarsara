@@ -422,8 +422,8 @@ export function ProductDetailPage() {
                             .reduce((sum, variant) => sum + variant.stock, 0);
                           return (
                             <TableRow key={option}>
-                              <TableCell className="font-bold tnum">{toFaDigits(option)}</TableCell>
-                              <TableCell className="tnum">
+                              <TableCell className="font-bold">{toFaDigits(option)}</TableCell>
+                              <TableCell>
                                 {waist != null ? `${toFaDigits(waist)}` : "—"}
                                 {waist != null && <span className="ms-1 text-xs text-muted-foreground">سانتی‌متر</span>}
                               </TableCell>

@@ -110,7 +110,7 @@ export function FilterPanel({ value, onChange, onReset }: FilterPanelProps) {
           />
         </div>
         {(value.minPrice || value.maxPrice) && (
-          <p className="text-xs text-muted-foreground tabular-nums">
+          <p className="text-xs text-muted-foreground">
             {value.minPrice ? `از ${formatNumber(Number(value.minPrice))} تومان` : "بدون کف قیمت"}
             {" — "}
             {value.maxPrice ? `تا ${formatNumber(Number(value.maxPrice))} تومان` : "بدون سقف قیمت"}

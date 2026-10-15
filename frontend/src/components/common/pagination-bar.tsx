@@ -50,7 +50,7 @@ export function PaginationBar({
 
   if (totalPages <= 1) {
     return counts && counts.total > 0 ? (
-      <p className={cn("text-center text-sm text-muted-foreground tabular-nums", className)}>
+      <p className={cn("text-center text-sm text-muted-foreground", className)}>
         {`${formatNumber(counts.total)} ${itemLabel}`}
       </p>
     ) : null;
@@ -63,7 +63,7 @@ export function PaginationBar({
         className,
       )}
     >
-      <p className="text-sm text-muted-foreground tabular-nums">
+      <p className="text-sm text-muted-foreground">
         {counts
           ? `نمایش ${rangeLabel(page, counts.pageSize, counts.total)} از ${formatNumber(counts.total)} ${itemLabel}`
           : `صفحه ${formatNumber(page)} از ${formatNumber(totalPages)}`}

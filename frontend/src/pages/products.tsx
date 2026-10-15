@@ -140,7 +140,7 @@ export function ProductsPage() {
           <h1 className="text-2xl font-extrabold">
             {filters.q ? `نتایج جست‌وجو برای «${filters.q}»` : "همه شلوارها"}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground tabular-nums">
+          <p className="mt-1 text-sm text-muted-foreground">
             {data
               ? `${formatNumber(data.total)} محصول یافت شد${totalPages > 1 ? ` — صفحهٔ ${formatNumber(page)} از ${formatNumber(totalPages)}` : ""}`
               : "در حال بارگذاری…"}
@@ -155,7 +155,7 @@ export function ProductsPage() {
               <SlidersHorizontal className="size-4" />
               فیلترها
               {chips.length > 0 && (
-                <span className="grid size-5 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground tabular-nums">
+                <span className="grid size-5 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground">
                   {formatNumber(chips.length)}
                 </span>
               )}
@@ -183,7 +183,7 @@ export function ProductsPage() {
               onClick={chip.onRemove}
               className="group inline-flex items-center gap-1.5 rounded-full bg-card py-1 ps-3 pe-2 text-xs shadow-[var(--shadow-border)] transition-colors duration-150 hover:text-destructive"
             >
-              <span className="tabular-nums">{chip.label}</span>
+              <span>{chip.label}</span>
               <X className="size-3.5 opacity-60 transition-opacity duration-150 group-hover:opacity-100" />
             </button>
           ))}
