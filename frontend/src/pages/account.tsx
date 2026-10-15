@@ -5,6 +5,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2,
+  Heart,
   Lock,
   MapPin,
   Receipt,
@@ -28,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AddressesTab } from "@/components/account/addresses-tab";
 import { OrdersTab } from "@/components/account/orders-tab";
+import { WishlistTab } from "@/components/account/wishlist-tab";
 import { authService } from "@/services/auth";
 import { errorMessage } from "@/lib/api";
 import { profileSchema, type ProfileValues } from "@/lib/schemas";
@@ -148,7 +150,7 @@ function ProfileTab() {
 }
 
 interface NavEntry {
-  value: "profile" | "addresses" | "orders";
+  value: "profile" | "addresses" | "orders" | "wishlist";
   path: string;
   label: string;
   icon: LucideIcon;
@@ -158,6 +160,7 @@ const TABS: NavEntry[] = [
   { value: "profile", path: "/account", label: "اطلاعات کاربری", icon: UserRound },
   { value: "addresses", path: "/account/addresses", label: "آدرس‌ها", icon: MapPin },
   { value: "orders", path: "/account/orders", label: "سفارش‌ها", icon: Receipt },
+  { value: "wishlist", path: "/account/wishlist", label: "علاقه‌مندی‌ها", icon: Heart },
 ];
 
 type AccountTab = NavEntry["value"];
@@ -248,6 +251,7 @@ export function AccountPage() {
           {tab === "profile" ? <ProfileTab /> : null}
           {tab === "addresses" ? <AddressesTab /> : null}
           {tab === "orders" ? <OrdersTab /> : null}
+          {tab === "wishlist" ? <WishlistTab /> : null}
         </main>
       </div>
     </div>

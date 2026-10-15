@@ -29,6 +29,8 @@ type Deps struct {
 	Payment  *handler.PaymentHandler
 	Category *handler.CategoryHandler
 	Product  *handler.ProductHandler
+	Review   *handler.ReviewHandler
+	Wishlist *handler.WishlistHandler
 	Admin    *handler.AdminHandler
 
 	AuthMW *middleware.Auth
@@ -140,6 +142,19 @@ func New(d Deps) *fiber.App {
 	products.Get("/:slug", d.Product.Get)
 	products.Get("/:slug/related", d.Product.Related)
 
+	// Published reviews are public; writing one belongs to a signed-in buyer who
+	// the product already reached (see ReviewService.Create).
+	products.Get("/:slug/reviews", d.Review.List)
+	api.Get("/products/:slug/reviews/mine", d.AuthMW.RequireAuth, d.Review.Mine)
+	api.Post("/products/:slug/reviews", d.AuthMW.RequireAuth, d.Review.Create)
+
+	// ---- wishlist ----
+	// Every write answers with the whole list, exactly like the cart.
+	wishlist := api.Group("/wishlist", d.AuthMW.RequireAuth)
+	wishlist.Get("/", d.Wishlist.List)
+	wishlist.Post("/", d.Wishlist.Add)
+	wishlist.Delete("/:productId", d.Wishlist.Remove)
+
 	// ---- admin ----
 	// Everything under /admin needs a valid token whose user still holds the
 	// admin role — RequireAuth reloads the user, so a revoked role takes effect
@@ -178,6 +193,11 @@ func New(d Deps) *fiber.App {
 	admin.Get("/coupons", d.Admin.ListCoupons)
 	admin.Post("/coupons", d.Admin.CreateCoupon)
 	admin.Patch("/coupons/:id", d.Admin.UpdateCoupon)
+
+	// Review moderation: approving or rejecting a review also refreshes the
+	// product's public rating.
+	admin.Get("/reviews", d.Admin.ListReviews)
+	admin.Patch("/reviews/:id", d.Admin.SetReviewStatus)
 
 	// ---- fallback ----
 	app.Use(func(c *fiber.Ctx) error {

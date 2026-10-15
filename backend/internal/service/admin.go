@@ -25,6 +25,7 @@ type AdminService struct {
 	coupons    *repository.CouponRepository
 	stats      *repository.StatsRepository
 	payments   *repository.PaymentRepository
+	reviews    *repository.ReviewRepository
 }
 
 // NewAdminService wires the admin service.
@@ -36,6 +37,7 @@ func NewAdminService(
 	coupons *repository.CouponRepository,
 	stats *repository.StatsRepository,
 	payments *repository.PaymentRepository,
+	reviews *repository.ReviewRepository,
 ) *AdminService {
 	return &AdminService{
 		products:   products,
@@ -45,6 +47,7 @@ func NewAdminService(
 		coupons:    coupons,
 		stats:      stats,
 		payments:   payments,
+		reviews:    reviews,
 	}
 }
 
@@ -65,6 +68,34 @@ func normalizeAdminPaging(page, limit int) (int, int) {
 // badInput is a validation failure with a message the admin can act on.
 func badInput(text string) error {
 	return &model.UserFacingError{Err: model.ErrValidation, Text: text}
+}
+
+// ---------- reviews ----------
+
+// ListReviews returns a page of reviews for the moderation table.
+func (s *AdminService) ListReviews(
+	ctx context.Context, f model.AdminReviewFilter,
+) (model.Page[model.AdminReviewRow], error) {
+	f.Page, f.Limit = normalizeAdminPaging(f.Page, f.Limit)
+	rows, total, err := s.reviews.AdminList(ctx, f)
+	if err != nil {
+		return model.Page[model.AdminReviewRow]{}, err
+	}
+	return model.NewPage(rows, f.Page, f.Limit, total), nil
+}
+
+// SetReviewStatus records a moderation decision, then keeps the product's
+// public rating in step with what is actually approved: approving a review
+// raises the stars, rejecting or un-approving one lowers them.
+func (s *AdminService) SetReviewStatus(ctx context.Context, id int64, status string) (*model.Review, error) {
+	review, err := s.reviews.AdminSetStatus(ctx, id, status)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.reviews.RecalcProductRating(ctx, review.ProductID); err != nil {
+		return nil, err
+	}
+	return review, nil
 }
 
 // translit maps Persian/Arabic letters and digits to Latin ones. Slugs are

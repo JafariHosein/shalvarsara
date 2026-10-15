@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { DiscountChip, Price } from "@/components/product/price";
 import { RatingStars } from "@/components/product/rating-stars";
 import { SmartImage } from "@/components/common/smart-image";
+import { WishlistButton } from "@/components/product/wishlist-button";
 import { toFaDigits } from "@/lib/format";
 import { discountPercent, primaryImage, variantSizes, type Product } from "@/types/api";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,8 @@ export function ProductCard({ product, className, variant = "default" }: Product
           </div>
         )}
       </Link>
+
+      <WishlistButton productId={product.id} className="absolute end-3 top-3 z-10" />
 
       <div className="flex flex-1 flex-col gap-2 p-3.5">
         <div className="flex items-center justify-between gap-2">

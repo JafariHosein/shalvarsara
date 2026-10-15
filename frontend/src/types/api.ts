@@ -346,6 +346,65 @@ export function variantColors(
 }
 
 // ---------------------------------------------------------------------------
+// Reviews and wishlist
+// ---------------------------------------------------------------------------
+
+export type ReviewStatus = "pending" | "approved" | "rejected";
+
+/** A review as its author sees it (the storefront view hides the id/status). */
+export interface Review {
+  id: number;
+  productId: number;
+  userId: number;
+  rating: number;
+  comment: string;
+  status: ReviewStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A published review, exactly as the product page renders it. */
+export interface ProductReview {
+  id: number;
+  rating: number;
+  comment: string;
+  /** Shortened display name ("حسین ج."). */
+  author: string;
+  createdAt: string;
+}
+
+/** The rating breakdown drawn above the review list. `stars[i]` counts (i+1)-star reviews. */
+export interface ReviewSummary {
+  average: number;
+  count: number;
+  stars: number[];
+}
+
+/** `GET /products/:slug/reviews` */
+export interface ProductReviews {
+  summary: ReviewSummary;
+  reviews: Page<ProductReview>;
+}
+
+/** `GET /products/:slug/reviews/mine` — may I review it, and did I already? */
+export interface MyReview {
+  canReview: boolean;
+  review?: Review;
+}
+
+/** One saved product, complete enough for the ordinary product card. */
+export interface WishlistEntry {
+  product: Product;
+  addedAt: string;
+}
+
+export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
+  pending: "در انتظار تأیید",
+  approved: "تأییدشده",
+  rejected: "ردشده",
+};
+
+// ---------------------------------------------------------------------------
 // Admin panel
 // ---------------------------------------------------------------------------
 
@@ -499,6 +558,22 @@ export interface AdminUserQuery {
 export interface AdminPaymentQuery {
   q?: string;
   status?: PaymentStatus | "all";
+  page?: number;
+  limit?: number;
+}
+
+/** One row of the review-moderation table: the review plus its product and author. */
+export interface AdminReviewRow {
+  review: Review;
+  productTitle: string;
+  productSlug: string;
+  author: string;
+  email: string;
+}
+
+export interface AdminReviewQuery {
+  q?: string;
+  status?: ReviewStatus | "all";
   page?: number;
   limit?: number;
 }

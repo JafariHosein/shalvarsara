@@ -105,6 +105,11 @@ func MapError(err error) (int, APIError) {
 		return fiber.StatusTooManyRequests, APIError{
 			Code: "too_many_requests", Message: "درخواست‌های بیش از حد. لطفاً کمی بعد دوباره امتحان کنید.",
 		}
+	case errors.Is(err, model.ErrReviewNotAllowed):
+		return fiber.StatusUnprocessableEntity, APIError{
+			Code:    "review_not_allowed",
+			Message: "فقط پس از خرید و تحویل این محصول می‌توانید نظر ثبت کنید.",
+		}
 	case errors.Is(err, model.ErrPaymentFailed):
 		return fiber.StatusPaymentRequired, APIError{Code: "payment_failed", Message: "پرداخت انجام نشد."}
 	default:

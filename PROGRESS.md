@@ -4,16 +4,15 @@
 > عامل بعدی (یا خودم در نشست بعدی) دقیقاً بداند چه چیزی ساخته شده،
 > چه چیزی تأیید شده، و قدم بعدی چیست.
 >
-> آخرین به‌روزرسانی: **بستهٔ درخواست کارفرما (پشتیبانی، قیمت‌ها، صفحه‌بندی،
-> تراکنش‌ها، نقشهٔ آدرس و محتوای صفحات)** انجام و در مرورگر تأیید شد: کادر
-> پشتیبانی چسبیده به **پایین-چپ**، «تومان» + جداکنندهٔ سه‌رقمی روی همهٔ
-> قیمت‌ها (حتی ورودی‌های پنل)، صفحه‌بندی شماره‌دار با «نمایش ۱–۱۲ از ۵۱
-> محصول»، صفحهٔ **تراکنش‌ها** در پنل، بخش **پنل پیامکی (به‌زودی)**، **نقشهٔ
-> انتخاب موقعیت** روی فرم آدرس و محتواسازی خانه/محصول با مهارت
-> `make-interfaces-feel-better` (بخش ۶ را ببینید).
-> پیش از آن: فاز ۴، بستهٔ بازبینی UI و ثبت‌نام با کد پیامکی کامل شده بودند.
+> آخرین به‌روزرسانی: **فاز ۵ — نظر خریدار تأییدشده و علاقه‌مندی‌ها** انجام و در
+> مرورگر تأیید شد: ثبت/ویرایش نظر فقط برای خریدار سفارش تحویل‌شده، خلاصهٔ امتیاز
+> و لیست عمومی روی صفحهٔ محصول، قلب علاقه‌مندی روی کارت‌ها، تب «علاقه‌مندی‌ها» در
+> حساب کاربری و صفحهٔ **مدیریت نظرات** در پنل (تأیید/رد با بازمحاسبهٔ امتیاز).
+> پیش از آن **عکس‌های واقعی محصولات** (۲۴۰ کات‌اوت WebP) جای تصویرسازی را
+> گرفت، و بستهٔ درخواست کارفرما (پشتیبانی، قیمت‌ها، صفحه‌بندی، تراکنش‌ها، نقشهٔ
+> آدرس و محتوای صفحات) هم انجام شده بود (بخش ۶ را ببینید).
 > بک‌اند و فرانت‌اند هر دو پاک (`build`/`vet`/`gofmt`/`typecheck`).
-> فاز بعدی: **فاز ۵ — نظرات و علاقه‌مندی‌ها**.
+> فاز بعدی: **فاز ۶ — آپلود تصویر**.
 
 ---
 
@@ -242,16 +241,26 @@ internal/config/config.go       خواندن env + اعتبارسنجی + ZarinP
 internal/database/database.go   pgxpool + health check
 internal/database/migrate.go    اجراکنندهٔ مهاجرت با advisory lock
 internal/model/                 address, admin (DTOهای پنل + CanTransition),
-                                cart, category, errors, order, pagination, product, user
+                                cart, category, errors, order, pagination, product,
+                                review (Review/ReviewInput/ReviewView/ReviewSummary/
+                                MyReview/AdminReviewFilter + MaskAuthor), user, wishlist
 internal/repository/            address, admin_product (محصول/گونه/تصویر + ProductSlugTaken),
                                 admin_order (ListForAdmin/TransitionStatus/restoreStock/UpsertShipment/statusFa),
-                                admin_user, admin_coupon, admin_stats,
-                                cart, category, coupon, errors, order, payment, product, user,
-                                verification (کد یکبارمصرف ثبت‌نام: Issue/LastIssuedAt/Verify)
-internal/service/               address, admin (قواعد پنل + اسلاگ‌ساز translit/slugify)،
+                                admin_user, admin_coupon, admin_stats, admin_review
+                                (صف مدیریت نظرات + AdminSetStatus),
+                                cart, category, coupon, errors, order, payment, product
+                                (+ ListByIDs برای علاقه‌مندی‌ها), review (نظرات عمومی
+                                + RatingSummary/RecomputeRating + eligibility)، user,
+                                verification (کد یکبارمصرف ثبت‌نام: Issue/LastIssuedAt/Verify),
+                                wishlist
+internal/service/               address, admin (قواعد پنل + اسلاگ‌ساز translit/slugify
+                                + ListReviews/SetReviewStatus)،
                                 auth (ورود/ثبت‌نام + کد تأیید پیامکی), cart, category,
-                                coupon, order, payment, product, token, user
-internal/handler/               address, admin, auth, cart, category, health, order, payment, product, user
+                                coupon, order, payment, product,
+                                review (قاعدهٔ «فقط خریدار تحویل‌گرفته» + بازمحاسبهٔ امتیاز)،
+                                token, user, wishlist
+internal/handler/               address, admin, auth, cart, category, health, order, payment,
+                                product, review, user, wishlist
                                 + query.go (parse صفحه‌بندی/مرتب‌سازی)
                                 + response.go و validator.go (واسط نازک روی httpx)
 internal/httpx/                 response.go, validate.go, format.go (ارقام فارسی) ← مشترک handler/middleware
@@ -259,6 +268,10 @@ internal/zarinpal/zarinpal.go   کلاینت v4 درگاه: Request, Verify, Sta
 internal/middleware/            auth.go (RequireAuth/RequireAdmin/OptionalAuth), logger.go
 internal/router/router.go       سیم‌کشی همهٔ مسیرها + CORS + rate limit + fallback 404
 internal/seeder/seeder.go       ساخت ۵۰ محصول، ۳ دسته، ۲ کوپن، ۲ کاربر
+                                + ۱۷۰ نظر (۱۵۵ تأییدشده / ۱۵ در انتظار) با
+                                وزن‌دهی امتیاز بر پایهٔ نوع محصول، و سفارش
+                                تحویل‌شدهٔ دموی `customer@example.com` — هر دو
+                                گام idempotent و وقتی جدولشان داده دارد رد می‌شوند
 ```
 
 **چرا `httpx` جدا شد؟** `handler` به `middleware` و `middleware` به `handler`
@@ -282,29 +295,37 @@ src/lib/schemas.ts              اسکیم‌های zod فرم‌ها (ورود/
                                 تصویر، دسته‌بندی، کوپن + مبدل‌های تاریخ و `digitsToNumber`)
 src/lib/utils.ts                cn()
 src/types/api.ts                تایپ‌های API + Order/Payment/OrderPreview/Shipment/Coupon +
-                                ORDER_STATUS_LABELS + ORDER_NEXT_STEPS
+                                ORDER_STATUS_LABELS + ORDER_NEXT_STEPS +
+                                Review/ProductReview/ReviewSummary/ProductReviews/MyReview/
+                                WishlistEntry + REVIEW_STATUS_LABELS + AdminReviewRow/Query
 src/store/auth-store.ts         کاربر + توکن‌ها؛ پس از ورود syncGuestCart() را صدا می‌زند
 src/store/cart-store.ts         سبد مهمان (persist در localStorage، version=2)
 src/services/                   auth, cart, products, categories, addresses, orders, payments, admin
+                                (+ reviews و wishlist)
 src/hooks/                      use-cart (واسط یکپارچهٔ سبد), use-products, use-categories,
-                                use-orders (preview/list/detail), use-admin (کوچ‌ها + جهش‌ها)
+                                use-orders (preview/list/detail), use-admin (کوچ‌ها + جهش‌ها
+                                + useAdminReviews/useUpdateReviewStatus),
+                                use-reviews (صفحه‌بندی‌شده + نظر خودم + ثبت/ویرایش),
+                                use-wishlist (کلید کش + useWishlistIds + useToggleWishlist)
 src/providers/theme-provider.tsx
 src/components/ui/              ۲۶ کامپوننت shadcn (accordion … tooltip)
 src/components/layout/          header, footer, site-layout, search-bar, theme-toggle
                                 (سوئیچ دوحالتهٔ روشن/تیره)، user-menu, auth-shell
-src/components/product/         product-card, product-grid, price, rating-stars,
-                                filter-panel
+src/components/product/         product-card (با قلب علاقه‌مندی), product-grid, price, rating-stars,
+                                filter-panel, wishlist-button (icon/pill)،
+                                product-reviews (خلاصهٔ امتیاز + لیست + فرم خریدار)
 src/components/common/          smart-image, empty-state, logo, protected-route,
                                 order-status-badge (مشترک بین پنل و حساب کاربری)
-src/components/account/         addresses-tab, orders-tab (+ AddressDialog صادرشده برای checkout)
+src/components/account/         addresses-tab, orders-tab (+ AddressDialog صادرشده برای checkout)،
+                                wishlist-tab
 src/components/admin/           page-header, table-pagination, confirm-dialog,
                                 variant-manager (UI: «گونه»), image-manager
 src/pages/                      home, products, product-detail, cart, checkout,
                                 payment-result, login, register (دو مرحله‌ای با کد
-                                پیامکی), account (منوی عمودی + سه بخش), not-found
+                                پیامکی), account (منوی عمودی + چهار بخش), not-found
 src/pages/admin/                layout (پوسته + نویگیشن عمودی + Outlet), dashboard, products,
                                 product-form, categories, orders, order-detail,
-                                users, coupons
+                                users, reviews (صف مدیریت نظرات), coupons
 ```
 
 ---
@@ -793,6 +814,39 @@ src/pages/admin/                layout (پوسته + نویگیشن عمودی +
 
 ---
 
+### فاز ۵ — نظر خریدار تأییدشده + علاقه‌مندی‌ها ✅ (تمام و تست‌شده)
+
+**قاعدهٔ اصلی: نظر فقط از خریدار.** پیش از ثبت، وجود همان محصول در یک سفارش
+با وضعیت `delivered` چک می‌شود؛ وگرنه **۴۲۲** `review_not_allowed` با پیام
+«فقط پس از خرید و تحویل این محصول می‌توانید نظر ثبت کنید.» برمی‌گردد. ویرایش
+همان نظر آن را به `pending` برمی‌گرداند و `products.rating_avg/rating_count`
+فقط از نظرهای `approved` بازمحاسبه می‌شود.
+
+- **مدل و سرویس:** `reviews` + `Review{rating,comment,status}`،
+  `ReviewView` (نام نویسنده با `MaskAuthor` کوتاه می‌شود: «حسین جعفری» →
+  «حسین ج.» — همهٔ نظرهای منتشرشده از خریدارند، پس نشان «خریدار» روی همه
+  درست است)، `ReviewSummary{average,count,stars[5]}` و
+  `MyReview{canReview,review?}`.
+- **عمومی:** `GET /products/:slug/reviews` = خلاصهٔ امتیاز + صفحهٔ نظرهای
+  منتشرشده (limit پیش‌فرض ۶). **خریدار:** `GET .../reviews/mine` و
+  `POST .../reviews` (ثبت دوباره = ویرایش، پاسخ ۲۰۱).
+- **علاقه‌مندی‌ها:** `GET/POST /wishlist` و `DELETE /wishlist/:productId`؛ هر
+  سه پاسخ **کل لیست** را می‌دهند (الگوی سبد) تا فرانت کش را یک‌جا جایگزین کند؛
+  افزودن تکراری و حذفِ نبوده no-op است و فقط محصول فعال برمی‌گردد.
+- **پنل مدیریت:** صفحهٔ «نظرات» با فیلتر وضعیت (پیش‌فرض «در انتظار تأیید»،
+  تا صف کار مدیر باز باشد) + جست‌وجوی نام محصول/مشتری/ایمیل و
+  `PATCH /admin/reviews/:id` برای تأیید/رد؛ در بک‌اند `"all"` مثل بقیهٔ
+  لیست‌های پنل یعنی «فیلتر نکن».
+- **فرانت:** قلب روی کارت محصول و دکمهٔ «علاقه‌مندی» در ستون خرید صفحهٔ محصول
+  (مهمان → پیام و انتقال به ورود با بازگشت به همان صفحه)، بخش «نظرات
+  خریداران» (میانگین + نمودار ستاره‌ای + لیست + فرم ثبت/ویرایش و نشان وضعیت)،
+  تب «علاقه‌مندی‌ها» در حساب کاربری و آیتم «نظرات» در نویگیشن پنل.
+- **دمو:** seeder ۱۷۰ نظر (۱۵۵ تأییدشده + ۱۵ در انتظار) با امتیاز وزن‌دار بر
+  پایهٔ نوع محصول و یک سفارش تحویل‌شده برای `customer@example.com` می‌سازد؛
+  هر دو گام idempotent‌اند.
+
+---
+
 ## ۷) شواهد تست — چه چیزی **قطعاً** کار می‌کند
 
 این‌ها را دوباره تست نکنید مگر چیزی تغییر کند.
@@ -1065,6 +1119,35 @@ node mobile-audit.mjs C:\...\job.json
   (دسکتاپ)، کارت پشتیبانی از همان لبه بالا باز می‌شود، آیکون نوار خدمات وسط
   متن، و اعداد بدون فاصلهٔ اضافه.
 
+### تست API — فاز ۵ (`phase5-test.mjs` — **۳۵/۳۵ قبول**)
+
+اسکریپت دوباره‌قابل‌اجرا روی `127.0.0.1:8080` (پیش‌نیاز: دیتابیس seed‌شده با
+سفارش تحویل‌شدهٔ دمو). هر اجرا یک نظر pending دیگر را هم رد می‌کند، پس بدون
+بازنشانی هم تکرارشدنی است:
+
+| گروه | نمونهٔ تیک‌ها |
+|---|---|
+| عمومی | خلاصهٔ امتیاز + لیست منتشرشده؛ غیبت نظر `pending`؛ نام کوتاه‌شدهٔ نویسنده («… ج.») |
+| صلاحیت | خریدار سفارش تحویل‌شده `canReview=true`؛ غیرخریدار **۴۲۲** `review_not_allowed`؛ مهمان ۴۰۱ |
+| ثبت/ویرایش | ۲۰۱؛ ثبت دوباره همان ردیف را ویرایش و به `pending` برمی‌گرداند؛ امتیاز ۹ → ۴۲۲ |
+| مدیریت | صف با نام محصول/مشتری/ایمیل؛ تأیید → انتشار + بازمحاسبهٔ `ratingAvg/ratingCount`؛ ۴۰۳ برای مشتری؛ ۴۰۴/۴۲۲ مرزی |
+| علاقه‌مندی | ۴۰۱ مهمان؛ افزودن/حذف؛ افزودن تکراری no-op؛ جدیدترین اول؛ ۴۰۴ محصول ناموجود |
+
+### تست مرورگر — فاز ۵ (هارنس CDP، روشن/تیره، ۳۲۰/۳۹۰/۱۴۴۰)
+
+- صفحهٔ محصول: بخش «نظرات خریداران» در ۱۴۴۰ دوستونه (خلاصهٔ چسبان + لیست) و
+  در ۳۹۰ عمودی؛ `overflowPx=0` در ۳۲۰/۳۹۰/۱۴۴۰ و هیچ عنصر کلیپ‌نشده.
+- فرم خریدار: «ویرایش نظر» فرم را با مقدارهای ثبت‌شده باز می‌کند؛ ذخیره →
+  نشان «در انتظار تأیید» برمی‌گردد (شاهد: `p5-pdp-edit-form`،
+  `p5-pdp-review-pending`).
+- غیرخریدار: پیام «فقط پس از خرید و تحویل این محصول…»؛ مهمان: کلیک قلب →
+  پیام «ابتدا وارد شوید» + انتقال به `/login` (مسیر با `eval` تأیید شد).
+- قلب کارت محصول: کلیک → افزودن واقعی سمت سرور و پرشدن قلب در شبکهٔ محصولات؛
+  تب «علاقه‌مندی‌ها» همان محصول را نشان می‌دهد و حالت خالی هم دیده شد.
+- پنل: صف پیش‌فرض «در انتظار تأیید»؛ تأیید یک ردیف آن را از جدول بیرون
+  می‌برد (۱۰→۹)؛ فیلتر «همه» = ۱۷۱ ردیف با نشان یک‌خطی؛ جست‌وجو روی ایمیل
+  مشتری نتیجه می‌دهد. شاهد: `…\Temp\opencode\shots\p5-*.jpeg`.
+
 ---
 
 ## ۸) نکات و ایرادهای شناخته‌شده ⚠️
@@ -1092,9 +1175,9 @@ node mobile-audit.mjs C:\...\job.json
    (`https://sandbox.zarinpal.com` در برابر `https://payment.zarinpal.com`).
    `ZARINPAL_MERCHANT_ID` در حالت سندباکس باید یک UUID دلبخواه باشد؛
    برای رفتن به تولید فقط همین دو مقدار عوض می‌شود، نه کد.
-7. **`orders`, `order_items`, `payments`, `coupons` دیگر بدون لایهٔ Go نیستند**
-   (فاز ۳ اضافه‌شان کرد). فقط `shipments`, `reviews`, `wishlists` مانده‌اند:
-   `shipments` در فاز ۴ (رهگیری ارسال) و `reviews`/`wishlists` در فاز ۵.
+7. **همهٔ جدول‌ها لایهٔ Go دارند.** `shipments` در فاز ۴ و `reviews`/`wishlists`
+   در فاز ۵ اضافه شدند؛ دیگر هیچ جدولی بدون repository نیست. اگر API را بدون
+   seed بالا بیاورید، فروشگاه خالی است ولی خطا نمی‌دهد (`SEED_ON_START=false`).
 8. **`session_id` جدول `carts` استفاده نمی‌شود.** سبد مهمان سمت مرورگر است،
    نه روی سرور. اگر روزی سبد مهمان سروری لازم شد (مثلاً اشتراک بین دستگاه‌ها)،
    همین ستون و `GetOrCreateBySession` نقطهٔ شروع است.
@@ -1181,6 +1264,15 @@ node mobile-audit.mjs C:\...\job.json
     می‌دهند؛ `Invoke-WebRequest` از PowerShell هم ۲۰۰ می‌دهد. راهکار: یک بار
     دیگر رفرش کنید؛ برای تست خودکار از هارنس CDP (بخش ۷) استفاده کنید که
     کانکتور را دور می‌زند. **این را باگ فرانت‌اند حساب نکنید.**
+23. **دموی فاز ۵ در پایگاه داده (عمدی):** سفارش **۹** برای
+    `customer@example.com` در وضعیت `delivered` است (محصول‌های ۷ و ۴۸) و همین
+    کاربر یک **نظر تأییدشده روی محصول ۷** دارد؛ می‌توانید ویرایشش کنید یا برای
+    کاربر دیگری نظر بسازید. seeder ۱۷۰ نظر با امتیاز وزن‌دار می‌سازد
+    (۱۵۵ تأییدشده + بقیه در انتظار) و `products.rating_avg/count` همهٔ ۵۰
+    محصول از همان‌ها بازمحاسبه می‌شود؛ اجرای دوبارهٔ seeder فقط چیزی می‌سازد
+    که نبوده. صف «در انتظار تأیید» بعد از تست‌ها به ~۹ رسید؛ برای پرترشدن،
+    `reviews.status` چند ردیف را دستی `pending` کنید. فهرست علاقه‌مندی‌های
+    همان کاربر دمو دو محصول (۷ و ۴۹) دارد.
 
 ---
 
@@ -1188,10 +1280,10 @@ node mobile-audit.mjs C:\...\job.json
 
 هر فاز را کامل و تست‌شده تحویل بده، بعد سراغ بعدی برو.
 
-> **فازهای ۱ تا ۴** و **دو بستهٔ درخواست کارفرما** (بازبینی UI/ثبت‌نام پیامکی،
+> **فازهای ۱ تا ۵** و **دو بستهٔ درخواست کارفرما** (بازبینی UI/ثبت‌نام پیامکی،
 > و بعد بستهٔ پشتیبانی/قیمت/صفحه‌بندی/تراکنش/نقشه/محتوا) انجام و تست شده‌اند
 > — بخش ۶.
-> فاز بعدی **فاز ۵ (نظرات و علاقه‌مندی‌ها)** است.
+> فاز بعدی **فاز ۶ (آپلود تصویر)** است.
 
 ### فاز ۴ — پنل مدیریت ✅ (تمام و تست‌شده — بخش ۶)
 - [x] CRUD محصولات، گونه‌ها، تصاویر، موجودی
@@ -1206,12 +1298,16 @@ node mobile-audit.mjs C:\...\job.json
 - ⏳ **مدیریت نظرات عمداً به فاز ۵ موکول شد** — هیچ نظری وجود ندارد که
   مدیریت شود؛ صفحهٔ مدیریتش هم‌زمان با خودِ نظرات ساخته می‌شود.
 
-### فاز ۵ — نظرات و علاقه‌مندی‌ها 🔴 فاز بعدی
-- [ ] ثبت نظر (فقط خریداران تأییدشده)، لیست، امتیاز میانگین
-- [ ] `wishlists` در UI
-- [ ] **مدیریت نظرات در پنل:** تب «نظرات» با تأیید/رد
-      (جدول `reviews` از فاز ۱ آماده است؛ `AdminStats` جای اضافه‌کردن شمارنده
-      نظرات در انتظار تأیید را دارد)
+### فاز ۵ — نظرات و علاقه‌مندی‌ها ✅ (تمام و تست‌شده — بخش ۶)
+- [x] ثبت نظر **فقط برای خریداران تأییدشده** (محصول در سفارش `delivered`)
+      + ویرایش نظر (بازگشت به صف تأیید)، لیست عمومی، خلاصهٔ امتیاز و میانگین
+- [x] `wishlists` در UI: قلب کارت محصول، دکمهٔ صفحهٔ محصول، تب «علاقه‌مندی‌ها»
+- [x] **مدیریت نظرات در پنل:** صفحهٔ «نظرات» با فیلتر وضعیت + جست‌وجو و
+      تأیید/رد؛ `products.rating_avg/count` فقط از نظرهای تأییدشده بازمحاسبه
+      می‌شود
+- [x] **معیار پذیرش:** خریدار دمو نظر ثبت/ویرایش کرد و پس از تأیید مدیر در
+      صفحهٔ محصول منتشر شد؛ غیرخریدار ۴۲۲ گرفت؛ قلب و تب علاقه‌مندی‌ها کار
+      کردند ✅
 
 ### فاز ۶ — آپلود تصویر
 - [ ] آپلود تصویر محصول (دیسک محلی برای dev، قابل سوئیچ به S3)
@@ -1247,6 +1343,11 @@ node mobile-audit.mjs C:\...\job.json
 /api/v1/payments/callback             (GET)                 ← عمومی: بازگشت مرورگر از درگاه
 /api/v1/categories
 /api/v1/products/                     + /suggest + /:slug + /:slug/related
+/api/v1/products/:slug/reviews        (GET)                 ← عمومی: خلاصهٔ امتیاز + صفحهٔ نظرهای منتشرشده
+/api/v1/products/:slug/reviews/mine   (GET)                 ← زیر RequireAuth: canReview + نظر خودم
+/api/v1/products/:slug/reviews        (POST)                ← زیر RequireAuth، فقط خریدار سفارش delivered (وگرنه ۴۲۲)
+/api/v1/wishlist                      (GET, POST)           ← زیر RequireAuth؛ پاسخ هر سه = کل لیست (الگوی سبد)
+/api/v1/wishlist/:productId           (DELETE)              ← حذفِ نبوده no-op است
 
 # پنل مدیریت — همه زیر RequireAuth + RequireAdmin
 /api/v1/admin/stats                   (GET)
@@ -1267,6 +1368,8 @@ node mobile-audit.mjs C:\...\job.json
 /api/v1/admin/coupons                 (GET, POST)
 /api/v1/admin/coupons/:id             (PATCH)
 /api/v1/admin/payments                (GET)   ← تراکنش‌ها: q + status + page/limit
+/api/v1/admin/reviews                 (GET)   ← صف نظرات: q (محصول/مشتری/ایمیل) + status + page/limit
+/api/v1/admin/reviews/:id             (PATCH) ← تأیید/رد؛ امتیاز محصول بازمحاسبه می‌شود
 ```
 
 **قرارداد پنل (رعایتش را در UI فرض بگیر):**
@@ -1413,21 +1516,17 @@ node mobile-audit.mjs C:\...\job.json
 `frontend/src/lib/contact.ts` را با شماره/شناسهٔ واقعی جایگزین کنید — کادر
 پشتیبانی، فوتر و صفحهٔ پرسش‌های پرتکرار همه از همان یک فایل می‌خوانند.
 
-**۲) فاز ۵ (نظرات و علاقه‌مندی‌ها)** — فاز ۴ و هر دو بستهٔ کارفرما کامل و
-پذیرفته شده‌اند. حالا دو قابلیت باقی‌ماندهٔ سند اصلی:
+**۲) فاز بعدی: فاز ۶ (آپلود تصویر)** — فاز ۵ (نظرات و علاقه‌مندی‌ها) هم کامل و
+پذیرفته شد؛ بخش ۶ را ببینید. نقطهٔ شروع فاز ۶:
 
-1. **نظرات:** جدول `reviews` از فاز ۱ وجود دارد.
-   - `GET /products/:slug/reviews` (صفحه‌بندی‌شده، عمومی) و
-     `POST /products/:id/reviews` (**فقط خریدار تأییدشده**: یک `order_item`
-     با `product_id` یکسان و سفارش `delivered` داشته باشد؛ وگرنه ۴۲۲ فارسی).
-   - به‌روزرسانی `products.rating` و `reviews_count` بعد از هر تأیید.
-   - سابقهٔ خرید را از `order_items` بگیر، نه از `orders` (تطبیق محصول لازم است).
-   - **مدیریت نظرات در پنل:** تب «نظرات» زیر `/admin`, تأیید/رد؛ یک قلم به
-     `ORDER_STATUS_STYLES`مانند **در `components/admin` اضافه نکن** — از همان
-     الگوی `products.tsx` (جدول + فیلتر وضعیت) استفاده کن.
-2. **علاقه‌مندی‌ها:** `wishlists` از فاز ۱ آماده است.
-   - `GET/POST/DELETE /wishlist` زیر احراز هویت + قلب روی `product-card`.
-   - تب «علاقه‌مندی‌ها» در `/account`.
+- `POST /admin/products/:id/images` امروز فقط `AdminImageInput` با `url`
+  **نسبی** می‌گیرد (`ImageManager` در پنل همان را پر می‌کند). فاز ۶ باید
+  آپلود فایل را اضافه کند: اعتبارسنجی نوع/حجم، بهینه‌سازی (همان زنجیرهٔ
+  کات‌اوت/WebP بخش ۶ در مروگر یا `imaging` در Go) و ذخیره روی دیسک محلی —
+  با یک لایهٔ ذخیره‌سازی که بعداً به S3 سوئیچ شود.
+- الگوی نام‌گذاری موجود (`{type}-{color}-{a|b|c}-{n}.webp` در
+  `frontend/public/products/`) و `cmd/imgfix` برای جایگزینی دسته‌ای عکس‌ها
+  همان چیزی است که باید با آپلود از پنل جایگزین/کامل شود.
 
 نکات آماده برای ادامه:
 

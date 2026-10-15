@@ -359,6 +359,36 @@ func (r *ProductRepository) GetVariant(ctx context.Context, productID, variantID
 	return &v, nil
 }
 
+// ListByIDs loads a set of listed products, each with its images and variants.
+// The caller owns the display order; the query returns them in id order.
+func (r *ProductRepository) ListByIDs(ctx context.Context, ids []int64) ([]model.Product, error) {
+	if len(ids) == 0 {
+		return []model.Product{}, nil
+	}
+	rows, err := r.db.Query(ctx,
+		productSelect+` WHERE p.id = ANY($1) AND p.deleted_at IS NULL AND p.is_active = TRUE`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	products := make([]model.Product, 0, len(ids))
+	for rows.Next() {
+		p, err := scanProduct(rows)
+		if err != nil {
+			return nil, err
+		}
+		products = append(products, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := r.attachMedia(ctx, products); err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
 // Count returns the number of active products.
 func (r *ProductRepository) Count(ctx context.Context) (int64, error) {
 	var n int64

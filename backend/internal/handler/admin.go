@@ -387,6 +387,40 @@ func (h *AdminHandler) UpdateUser(c *fiber.Ctx) error {
 	return OK(c, user)
 }
 
+// ---- reviews ----
+
+// ListReviews returns a page of customer reviews for moderation.
+func (h *AdminHandler) ListReviews(c *fiber.Ctx) error {
+	filter := model.AdminReviewFilter{
+		Query:  queryString(c, "q"),
+		Status: queryString(c, "status"),
+		Page:   queryInt(c, "page", 1),
+		Limit:  queryInt(c, "limit", 20),
+	}
+	page, err := h.admin.ListReviews(c.Context(), filter)
+	if err != nil {
+		return Fail(c, err)
+	}
+	return OK(c, page)
+}
+
+// SetReviewStatus approves or rejects a review.
+func (h *AdminHandler) SetReviewStatus(c *fiber.Ctx) error {
+	id, err := paramID(c)
+	if err != nil {
+		return Fail(c, err)
+	}
+	var in model.AdminReviewStatusInput
+	if err := bind(c, &in); err != nil {
+		return Fail(c, err)
+	}
+	review, err := h.admin.SetReviewStatus(c.Context(), id, in.Status)
+	if err != nil {
+		return Fail(c, err)
+	}
+	return OK(c, review)
+}
+
 // ---- coupons ----
 
 // ListCoupons returns a page of discount codes.

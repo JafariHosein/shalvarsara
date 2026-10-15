@@ -8,6 +8,8 @@ import type {
   AdminPaymentRow,
   AdminProductInput,
   AdminProductQuery,
+  AdminReviewQuery,
+  AdminReviewRow,
   AdminStats,
   AdminUserQuery,
   AdminUserRow,
@@ -19,6 +21,8 @@ import type {
   OrderStatus,
   Page,
   Product,
+  Review,
+  ReviewStatus,
   User,
 } from "@/types/api";
 
@@ -143,6 +147,24 @@ export const adminService = {
       signal,
       query: { q: query.q, status: query.status, page: query.page, limit: query.limit },
     }),
+
+  // ---- reviews ----
+  /**
+   * GET /admin/reviews — the moderation queue, newest first.
+   *
+   * `q` matches the product title, the customer's name or their email; `status`
+   * narrows the queue to one state (`all` keeps every review).
+   */
+  reviews: (query: AdminReviewQuery, signal?: AbortSignal) =>
+    http.get<Page<AdminReviewRow>>("/admin/reviews", {
+      auth: true,
+      signal,
+      query: { q: query.q, status: query.status, page: query.page, limit: query.limit },
+    }),
+
+  /** PATCH /admin/reviews/:id — approve or reject one review. */
+  setReviewStatus: (id: number, status: ReviewStatus) =>
+    http.patch<Review>(`/admin/reviews/${id}`, { status }, { auth: true }),
 
   // ---- coupons ----
   /** GET /admin/coupons */

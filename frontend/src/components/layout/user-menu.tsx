@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { LayoutDashboard, LogOut, Package, User as UserIcon } from "lucide-react";
+import { Heart, LayoutDashboard, LogOut, Package, User as UserIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,12 @@ export function UserMenu() {
           <Link to="/account/orders" className="cursor-pointer">
             <Package />
             سفارش‌های من
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/account/wishlist" className="cursor-pointer">
+            <Heart />
+            علاقه‌مندی‌های من
           </Link>
         </DropdownMenuItem>
         {isAdmin && (

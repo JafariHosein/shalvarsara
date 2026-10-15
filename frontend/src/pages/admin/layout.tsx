@@ -7,6 +7,7 @@ import {
   MessageSquareText,
   Receipt,
   ShieldCheck,
+  Star,
   Store,
   TicketPercent,
   Users,
@@ -35,6 +36,7 @@ const NAV: NavEntry[] = [
   { to: "/admin/orders", label: "سفارش‌ها", icon: Receipt },
   { to: "/admin/payments", label: "تراکنش‌ها", icon: CreditCard },
   { to: "/admin/users", label: "کاربران", icon: Users },
+  { to: "/admin/reviews", label: "نظرات", icon: Star },
   { to: "/admin/coupons", label: "کدهای تخفیف", icon: TicketPercent },
   { to: "/admin/sms", label: "پنل پیامکی", icon: MessageSquareText, soon: true },
 ];

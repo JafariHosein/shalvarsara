@@ -1,15 +1,19 @@
 // Package seeder fills an empty database with realistic starting data: an
-// admin account, a demo customer, categories, coupons and 50 trousers.
+// admin account, demo customers, categories, coupons, 50 trousers, their
+// reviews and one delivered order so the review flow can be tried out.
 //
-// Seeding is idempotent: users and categories are upserted, and the catalogue
-// is only generated when the products table is still empty.
+// Seeding is idempotent: users and categories are upserted, the catalogue is
+// only generated when the products table is still empty, and the reviews and
+// the delivered order are skipped once their own tables have data.
 package seeder
 
 import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
@@ -42,13 +46,23 @@ func Seed(ctx context.Context, db *database.Pool, admin config.AdminConfig) erro
 	}
 	if existing > 0 {
 		log.Info().Int64("products", existing).Msg("catalogue already present; skipping product generation")
-		return nil
+	} else {
+		if err := seedProducts(ctx, db, rng, categories); err != nil {
+			return fmt.Errorf("seed products: %w", err)
+		}
+		log.Info().Int("products", productCount).Msg("catalogue seeded")
 	}
 
-	if err := seedProducts(ctx, db, rng, categories); err != nil {
-		return fmt.Errorf("seed products: %w", err)
+	// Reviews and the delivered demo order build on the catalogue. Each of them
+	// checks for its own data first, so a database seeded before they existed
+	// picks them up on the next boot instead of needing a reset.
+	deliveredProducts, err := seedDeliveredOrder(ctx, db, rng)
+	if err != nil {
+		return fmt.Errorf("seed delivered order: %w", err)
 	}
-	log.Info().Int("products", productCount).Msg("catalogue seeded")
+	if err := seedReviews(ctx, db, rng, deliveredProducts); err != nil {
+		return fmt.Errorf("seed reviews: %w", err)
+	}
 	return nil
 }
 
@@ -388,4 +402,336 @@ func pickColors(rng *rand.Rand, n int) []seedColor {
 		out = append(out, colors[idx])
 	}
 	return out
+}
+
+// --------------------------------------------------------------- reviews ----
+
+// reviewAuthors are the extra demo customers whose names appear on the seeded
+// reviews. They are ordinary customer accounts sharing the demo password; the
+// storefront only ever shows a shortened name from them.
+var reviewAuthors = []struct {
+	name  string
+	email string
+	phone string
+}{
+	{"سارا محمدی", "customer2@example.com", "09121111112"},
+	{"امیر رضایی", "customer3@example.com", "09121111113"},
+	{"نگار کریمی", "customer4@example.com", "09121111114"},
+	{"مهدی توکلی", "customer5@example.com", "09121111115"},
+	{"الهام صادقی", "customer6@example.com", "09121111116"},
+	{"رضا نجفی", "customer7@example.com", "09121111117"},
+	{"مریم حیدری", "customer8@example.com", "09121111118"},
+}
+
+// reviewComments are deliberately product-agnostic, so one pool fits the whole
+// catalogue instead of needing one set of lines per pant type.
+var reviewComments = []string{
+	"کیفیت دوخت و پارچه واقعاً خوبه، بعد از چند بار شست‌وشو هم رنگش نپرید.",
+	"سایز رو دقیقاً مطابق جدول بگیرید؛ قد و دمپا همون چیزی بود که می‌خواستم.",
+	"خوش‌دوخت و تمیزه، فقط کمی بلندتر از تصورم بود که خودم کوتاهش کردم.",
+	"برای استفادهٔ روزمره عالیه؛ سبک و راحته و توی گرما هم اذیت نمی‌کنه.",
+	"قیمت به‌نسبت کیفیت منصفانه‌ست، بسته‌بندی هم مرتب و بدون آسیب رسید.",
+	"رنگش دقیقاً مثل عکسه؛ همون چیزی که می‌بینید به دستتون می‌رسه.",
+	"کمرش خوب جا می‌افته و توی راه رفتن کش نمی‌کنه. خرید خوبی بود.",
+	"مناسب محل کار و مهمونی؛ هم رسمی به نظر می‌رسه هم راحت.",
+	"انتظار داشتم پارچه ضخیم‌تر باشه، ولی برای بهار و پاییز مناسبه.",
+	"چند ماهه دارم استفاده می‌کنم و همچنان شکل و فرم اولش رو داره.",
+	"ارسال سریع بود و سفارش سالم رسید؛ بابت پیگیری هم ممنون.",
+	"راضی بودم، ولی اگه جیب‌ها کمی عمیق‌تر بود بهتر می‌شد.",
+}
+
+// seedDeliveredOrder gives the demo customer one delivered order, so the rule
+// "only a verified buyer may rate" can be tried out without walking a real
+// order through the whole pipeline. It returns the products in that order and
+// does nothing once the customer already has a delivered order.
+func seedDeliveredOrder(ctx context.Context, db *database.Pool, rng *rand.Rand) ([]int64, error) {
+	var userID int64
+	if err := db.QueryRow(ctx,
+		`SELECT id FROM users WHERE email = 'customer@example.com'`).Scan(&userID); err != nil {
+		return nil, err
+	}
+
+	var exists bool
+	if err := db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM orders WHERE user_id = $1 AND status = 'delivered'
+		)`, userID).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if exists {
+		return []int64{}, nil
+	}
+
+	type line struct {
+		productID int64
+		title     string
+		image     string
+		label     string
+		price     int64
+	}
+
+	rows, err := db.Query(ctx, `
+		SELECT p.id, p.title, COALESCE(p.discount_price, p.price),
+		       COALESCE((SELECT i.url FROM product_images i
+		                 WHERE i.product_id = p.id
+		                 ORDER BY i.is_primary DESC, i.sort_order, i.id LIMIT 1), ''),
+		       COALESCE((SELECT v.size  FROM product_variants v
+		                 WHERE v.product_id = p.id ORDER BY v.id LIMIT 1), ''),
+		       COALESCE((SELECT v.color FROM product_variants v
+		                 WHERE v.product_id = p.id ORDER BY v.id LIMIT 1), '')
+		FROM products p
+		WHERE p.is_active AND p.deleted_at IS NULL AND p.stock > 0
+		ORDER BY p.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var catalogue []line
+	for rows.Next() {
+		var l line
+		var size, colour string
+		if err := rows.Scan(&l.productID, &l.title, &l.price, &l.image, &size, &colour); err != nil {
+			return nil, err
+		}
+		l.label = variantLabel(size, colour)
+		catalogue = append(catalogue, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(catalogue) < 2 {
+		log.Warn().Msg("not enough products for a delivered demo order; skipping")
+		return []int64{}, nil
+	}
+
+	// Two products, drawn from the whole catalogue so they are not always the
+	// same first two.
+	picked := make([]line, 0, 2)
+	for len(picked) < 2 {
+		l := catalogue[rng.Intn(len(catalogue))]
+		duplicate := false
+		for _, p := range picked {
+			if p.productID == l.productID {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			picked = append(picked, l)
+		}
+	}
+	orderProducts := make([]int64, 0, 2)
+	subtotal := int64(0)
+	for _, l := range picked {
+		subtotal += l.price
+		orderProducts = append(orderProducts, l.productID)
+	}
+	const shipping = 45000
+
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback after commit is a no-op
+
+	var orderID int64
+	codePrefix := "SS-" + strconv.Itoa(model.JalaliYear(time.Now())) + "-"
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO orders (
+			code, user_id, status, subtotal, discount, shipping_cost, total,
+			ship_receiver_name, ship_phone, ship_province, ship_city, ship_postal_code, ship_line1
+		) VALUES (
+			$1 || lpad(nextval('order_code_seq')::text, 6, '0'), $2, 'delivered',
+			$3, 0, $4, $5, $6, $7, $8, $9, $10, $11
+		) RETURNING id`,
+		codePrefix, userID, subtotal, shipping, subtotal+shipping,
+		"کاربر نمونه", "09121111111", "تهران", "تهران", "1234567890", "خیابان ولیعصر، پلاک ۱۲، واحد ۳",
+	).Scan(&orderID); err != nil {
+		return nil, err
+	}
+
+	for _, l := range picked {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO order_items (
+				order_id, product_id, title, variant_label, image_url, unit_price, quantity
+			) VALUES ($1, $2, $3, $4, $5, $6, 1)`,
+			orderID, l.productID, l.title, l.label, l.image, l.price); err != nil {
+			return nil, err
+		}
+	}
+
+	// A verified payment, so the admin payment list has something to show for
+	// the order. Amounts in the payments table are Rial.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO payments (order_id, gateway, authority, ref_id, amount, status, card_pan, message)
+		VALUES ($1, 'zarinpal', $2, $3, $4, 'verified', '6037****1234', 'پرداخت موفق (دادهٔ نمونه)')`,
+		orderID, "DEMO"+strconv.FormatInt(orderID, 10), strconv.FormatInt(1000000000+orderID, 10), (subtotal+shipping)*10,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	log.Info().Int64("order", orderID).Int("products", len(orderProducts)).Msg("delivered demo order ready")
+	return orderProducts, nil
+}
+
+// seedReviews fills the product pages with plausible reviews and a short
+// moderation queue, then derives every product's public rating from the reviews
+// that are actually approved. It runs once: an existing review table is left
+// alone.
+func seedReviews(ctx context.Context, db *database.Pool, rng *rand.Rand, deliveredProducts []int64) error {
+	var existing int64
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM reviews`).Scan(&existing); err != nil {
+		return err
+	}
+	if existing > 0 {
+		log.Info().Int64("reviews", existing).Msg("reviews already present; skipping review seeding")
+		return nil
+	}
+
+	// ---- authors ----
+	var demoID int64
+	if err := db.QueryRow(ctx,
+		`SELECT id FROM users WHERE email = 'customer@example.com'`).Scan(&demoID); err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("Customer@12345"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	authors := []int64{demoID}
+	for _, a := range reviewAuthors {
+		var id int64
+		if err := db.QueryRow(ctx, `
+			INSERT INTO users (name, email, phone, password_hash, role)
+			VALUES ($1, $2, $3, $4, 'customer')
+			ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+			RETURNING id`, a.name, a.email, a.phone, string(hash)).Scan(&id); err != nil {
+			return err
+		}
+		authors = append(authors, id)
+	}
+
+	// ---- the products to review ----
+	rows, err := db.Query(ctx, `
+		SELECT id FROM products
+		WHERE is_active AND deleted_at IS NULL
+		ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var productIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		productIDs = append(productIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// The demo customer stays a "clean" buyer for the products in their
+	// delivered order, so the review form can be demonstrated on them.
+	fresh := make(map[int64]bool, len(deliveredProducts))
+	for _, id := range deliveredProducts {
+		fresh[id] = true
+	}
+
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback after commit is a no-op
+
+	approved, pending := 0, 0
+	for _, productID := range productIDs {
+		want := 2 + rng.Intn(4) // 2..5 reviews
+		written := 0
+		for _, idx := range rng.Perm(len(authors)) {
+			if written >= want {
+				break
+			}
+			authorID := authors[idx]
+			if authorID == demoID && fresh[productID] {
+				continue
+			}
+			// Roughly one in seven waits for moderation. The first review of a
+			// product is always published, so a rated product keeps its stars.
+			status := model.ReviewApproved
+			if written > 0 && rng.Intn(7) == 0 {
+				status = model.ReviewPending
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO reviews (product_id, user_id, rating, comment, status, created_at)
+				VALUES ($1, $2, $3, $4, $5, now() - make_interval(days => $6))
+				ON CONFLICT (product_id, user_id) DO NOTHING`,
+				productID, authorID, weightedRating(rng),
+				reviewComments[rng.Intn(len(reviewComments))], status, 1+rng.Intn(330),
+			); err != nil {
+				return err
+			}
+			written++
+			if status == model.ReviewApproved {
+				approved++
+			} else {
+				pending++
+			}
+		}
+	}
+
+	// ---- public ratings follow the published reviews ----
+	if _, err := tx.Exec(ctx, `
+		UPDATE products p SET
+			rating_avg = COALESCE((
+				SELECT ROUND(avg(r.rating), 2) FROM reviews r
+				WHERE r.product_id = p.id AND r.status = 'approved'
+			), 0),
+			rating_count = (
+				SELECT count(*) FROM reviews r
+				WHERE r.product_id = p.id AND r.status = 'approved'
+			)`); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	log.Info().Int("approved", approved).Int("pending", pending).Msg("reviews seeded")
+	return nil
+}
+
+// weightedRating draws a rating the way a shop's reviews actually look: mostly
+// four and five stars, with the occasional complaint.
+func weightedRating(rng *rand.Rand) int32 {
+	switch roll := rng.Intn(100); {
+	case roll < 46:
+		return 5
+	case roll < 82:
+		return 4
+	case roll < 93:
+		return 3
+	case roll < 98:
+		return 2
+	default:
+		return 1
+	}
+}
+
+// variantLabel renders the size/colour pair stored on an order line, matching
+// the labels the order service writes ("سایز ۳۲ · سرمه‌ای").
+func variantLabel(size, colour string) string {
+	parts := make([]string, 0, 2)
+	if size != "" {
+		parts = append(parts, "سایز "+size)
+	}
+	if colour != "" {
+		parts = append(parts, colour)
+	}
+	return strings.Join(parts, " · ")
 }

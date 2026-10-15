@@ -10,9 +10,11 @@ import type {
   AdminPaymentQuery,
   AdminProductInput,
   AdminProductQuery,
+  AdminReviewQuery,
   AdminUserQuery,
   AdminVariantInput,
   OrderStatus,
+  ReviewStatus,
 } from "@/types/api";
 
 const {
@@ -39,6 +41,8 @@ const {
   payments,
   users,
   updateUser,
+  reviews,
+  setReviewStatus,
   coupons,
   createCoupon,
   updateCoupon,
@@ -126,6 +130,14 @@ export function useAdminCoupons(query: { q?: string; page?: number; limit?: numb
   return useQuery({
     queryKey: ["admin", "coupons", query],
     queryFn: ({ signal }) => coupons(query, signal),
+  });
+}
+
+/** A page of the review-moderation queue. */
+export function useAdminReviews(query: AdminReviewQuery) {
+  return useQuery({
+    queryKey: ["admin", "reviews", query],
+    queryFn: ({ signal }) => reviews(query, signal),
   });
 }
 
@@ -376,6 +388,25 @@ export function useUpdateCoupon() {
     onSuccess: () => {
       invalidate();
       toast.success("کد تخفیف ذخیره شد.");
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+}
+
+/**
+ * Approve or reject one review. The response is the review itself, so the toast
+ * can name the outcome; moderating also moves the product's public rating, so
+ * the storefront caches are refreshed too.
+ */
+export function useUpdateReviewStatus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: ReviewStatus }) => setReviewStatus(id, status),
+    onSuccess: (review) => {
+      void client.invalidateQueries({ queryKey: ["admin", "reviews"] });
+      void client.invalidateQueries({ queryKey: ["reviews"] });
+      void client.invalidateQueries({ queryKey: ["product"] });
+      toast.success(review.status === "approved" ? "نظر تأیید و منتشر شد." : "نظر رد شد.");
     },
     onError: (error) => toast.error(errorMessage(error)),
   });

@@ -19,6 +19,7 @@ var (
 	ErrPaymentFailed     = errors.New("payment failed")
 	ErrInvalidCode       = errors.New("invalid verification code")
 	ErrTooManyRequests   = errors.New("too many requests")
+	ErrReviewNotAllowed  = errors.New("review not allowed")
 )
 
 // UserFacingError wraps a sentinel error with a message that is safe and useful

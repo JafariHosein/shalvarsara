@@ -72,6 +72,8 @@ func run() error {
 	paymentRepo := repository.NewPaymentRepository(db)
 	statsRepo := repository.NewStatsRepository(db)
 	verificationRepo := repository.NewPhoneVerificationRepository(db)
+	reviewRepo := repository.NewReviewRepository(db)
+	wishlistRepo := repository.NewWishlistRepository(db)
 
 	tokens := service.NewTokenService(cfg.JWT)
 	gateway := zarinpal.New(cfg.ZarinPal)
@@ -85,8 +87,10 @@ func run() error {
 	couponService := service.NewCouponService(couponRepo)
 	orderService := service.NewOrderService(cartRepo, orderRepo, addressRepo, couponService, cfg.Shipping)
 	paymentService := service.NewPaymentService(orderRepo, paymentRepo, userRepo, gateway, cfg.ZarinPal)
+	reviewService := service.NewReviewService(reviewRepo, productRepo)
+	wishlistService := service.NewWishlistService(wishlistRepo, productRepo)
 	adminService := service.NewAdminService(
-		productRepo, categoryRepo, orderRepo, userRepo, couponRepo, statsRepo, paymentRepo,
+		productRepo, categoryRepo, orderRepo, userRepo, couponRepo, statsRepo, paymentRepo, reviewRepo,
 	)
 
 	app := router.New(router.Deps{
@@ -100,6 +104,8 @@ func run() error {
 		Payment:  handler.NewPaymentHandler(paymentService, cfg.ZarinPal),
 		Category: handler.NewCategoryHandler(categoryService),
 		Product:  handler.NewProductHandler(productService),
+		Review:   handler.NewReviewHandler(reviewService),
+		Wishlist: handler.NewWishlistHandler(wishlistService),
 		Admin:    handler.NewAdminHandler(adminService),
 		AuthMW:   middleware.NewAuth(tokens, userRepo),
 	})

@@ -18,7 +18,9 @@ import { EmptyState } from "@/components/common/empty-state";
 import { SmartImage } from "@/components/common/smart-image";
 import { DiscountChip, Price } from "@/components/product/price";
 import { ProductGrid } from "@/components/product/product-grid";
+import { ProductReviews } from "@/components/product/product-reviews";
 import { RatingStars } from "@/components/product/rating-stars";
+import { WishlistButton } from "@/components/product/wishlist-button";
 import { useProduct, useRelatedProducts } from "@/hooks/use-products";
 import { useCart } from "@/hooks/use-cart";
 import { formatNumber, toEnDigits, toFaDigits } from "@/lib/format";
@@ -390,6 +392,7 @@ export function ProductDetailPage() {
               <ShoppingBag className="size-5" />
               {inStock ? "افزودن به سبد خرید" : "ناموجود"}
             </Button>
+            <WishlistButton productId={product.id} variant="pill" className="h-11" />
           </div>
 
           {inStock && availableStock <= 5 && (
@@ -544,6 +547,9 @@ export function ProductDetailPage() {
           </Accordion>
         </div>
       </div>
+
+      {/* ---------- reviews ---------- */}
+      <ProductReviews slug={slug} />
 
       {/* ---------- related ---------- */}
       {related.data && related.data.length > 0 && (

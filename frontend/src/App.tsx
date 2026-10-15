@@ -33,6 +33,7 @@ const AdminOrderDetail = lazy(() =>
 const AdminUsers = lazy(() => import("@/pages/admin/users").then((m) => ({ default: m.AdminUsers })));
 const AdminCoupons = lazy(() => import("@/pages/admin/coupons").then((m) => ({ default: m.AdminCoupons })));
 const AdminPayments = lazy(() => import("@/pages/admin/payments").then((m) => ({ default: m.AdminPayments })));
+const AdminReviews = lazy(() => import("@/pages/admin/reviews").then((m) => ({ default: m.AdminReviews })));
 const AdminSms = lazy(() => import("@/pages/admin/sms").then((m) => ({ default: m.AdminSms })));
 const NotFoundPage = lazy(() => import("@/pages/not-found").then((m) => ({ default: m.NotFoundPage })));
 
@@ -97,6 +98,15 @@ export function App() {
           }
         />
 
+        <Route
+          path="account/wishlist"
+          element={
+            <ProtectedRoute>
+              <AccountPage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* The management panel: one guard, a shared shell, and a screen per
             section. Every child is fetched on demand. */}
         <Route
@@ -117,6 +127,7 @@ export function App() {
           <Route path="users" element={<AdminUsers />} />
           <Route path="coupons" element={<AdminCoupons />} />
           <Route path="payments" element={<AdminPayments />} />
+          <Route path="reviews" element={<AdminReviews />} />
           <Route path="sms" element={<AdminSms />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
