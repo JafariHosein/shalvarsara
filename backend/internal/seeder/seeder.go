@@ -203,18 +203,32 @@ var fabrics = []string{
 	"جین کشی", "پارچه فاستونی", "کتان", "مخلوط پنبه", "کتان کشی", "جین سنگ‌شور", "کرپ",
 }
 
-var colors = []struct {
+// seedColor is one colour option. The slug matches the file names of the
+// product photography in frontend/public/products.
+type seedColor struct {
+	slug string
 	name string
 	hex  string
-}{
-	{"مشکی", "#111827"},
-	{"سرمه‌ای", "#1E3A8A"},
-	{"آبی روشن", "#60A5FA"},
-	{"خاکستری", "#6B7280"},
-	{"بژ", "#D6C4A8"},
-	{"زیتونی", "#4B5320"},
-	{"قهوه‌ای", "#6B4226"},
-	{"شکلاتی", "#4B2E2E"},
+}
+
+// imageView is one gallery slot: which shot of which colour photo to use, and
+// the caption it gets.
+type imageView struct {
+	suffix string
+	colour seedColor
+	label  string
+	photo  int
+}
+
+var colors = []seedColor{
+	{"black", "مشکی", "#111827"},
+	{"navy", "سرمه‌ای", "#1E3A8A"},
+	{"lightblue", "آبی روشن", "#60A5FA"},
+	{"gray", "خاکستری", "#6B7280"},
+	{"beige", "بژ", "#D6C4A8"},
+	{"olive", "زیتونی", "#4B5320"},
+	{"brown", "قهوه‌ای", "#6B4226"},
+	{"chocolate", "شکلاتی", "#4B2E2E"},
 }
 
 func seedProducts(ctx context.Context, db *database.Pool, rng *rand.Rand, cats map[string]seedCategory) error {
@@ -267,6 +281,7 @@ func seedProducts(ctx context.Context, db *database.Pool, rng *rand.Rand, cats m
 		// 1..2 colours per product.
 		colorCount := 1 + rng.Intn(2)
 		chosenColors := pickColors(rng, colorCount)
+		primaryColor := chosenColors[0]
 
 		var productID int64
 		if err := tx.QueryRow(ctx, `
@@ -284,12 +299,29 @@ func seedProducts(ctx context.Context, db *database.Pool, rng *rand.Rand, cats m
 		}
 
 		// ---- images ----
-		for imgIdx := 0; imgIdx < 3; imgIdx++ {
-			url := fmt.Sprintf("https://picsum.photos/seed/%s-%d/800/1000", slug, imgIdx)
+		// Product photography lives in frontend/public/products as
+		// {pantType}-{colour}-{a|b|c}-{photo}.webp: a full-length shot, a
+		// waistband/pocket detail and a hem detail, cut out on transparency so
+		// the pictures sit on both the light and the dark theme.
+		// Products sharing a type/colour pair alternate between the two photos.
+		photo := int(productID%2) + 1
+		other := 3 - photo
+		views := []imageView{
+			{"a", primaryColor, "نمای کامل", photo},
+			{"b", primaryColor, "جزئیات کمر و جیب", photo},
+		}
+		if len(chosenColors) > 1 {
+			views = append(views, imageView{"a", chosenColors[1], "نمای کامل", other})
+		}
+		views = append(views, imageView{"c", primaryColor, "دمپا و قد شلوار", photo})
+		for imgIdx, view := range views {
+			url := fmt.Sprintf("/products/%s-%s-%s-%d.webp", pant.english, view.colour.slug, view.suffix, view.photo)
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO product_images (product_id, url, alt, is_primary, sort_order)
 				VALUES ($1, $2, $3, $4, $5)`,
-				productID, url, fmt.Sprintf("%s — تصویر %d", title, imgIdx+1), imgIdx == 0, imgIdx,
+				productID, url,
+				fmt.Sprintf("%s — %s، رنگ %s", title, view.label, view.colour.name),
+				imgIdx == 0, imgIdx,
 			); err != nil {
 				return err
 			}
@@ -346,18 +378,12 @@ func pickSizes(rng *rand.Rand, sizes []string, n int) []string {
 }
 
 // pickColors returns n distinct colour options.
-func pickColors(rng *rand.Rand, n int) []struct {
-	name string
-	hex  string
-} {
+func pickColors(rng *rand.Rand, n int) []seedColor {
 	if n > len(colors) {
 		n = len(colors)
 	}
 	perm := rng.Perm(len(colors))[:n]
-	out := make([]struct {
-		name string
-		hex  string
-	}, 0, n)
+	out := make([]seedColor, 0, n)
 	for _, idx := range perm {
 		out = append(out, colors[idx])
 	}

@@ -28,6 +28,21 @@ import { discountPercent, variantColors, variantSizes, type ProductVariant } fro
 /** A colour choice, with availability for the currently selected size. */
 type ColorOption = { color: string; colorHex: string; stock: number; disabled?: boolean };
 
+/**
+ * Colour names → the slug used in the generated artwork's file names
+ * (see frontend/scripts/generate-product-images.mjs and the Go seeder).
+ */
+const COLOR_SLUGS: Record<string, string> = {
+  "مشکی": "black",
+  "سرمه‌ای": "navy",
+  "آبی روشن": "lightblue",
+  "خاکستری": "gray",
+  "بژ": "beige",
+  "زیتونی": "olive",
+  "قهوه‌ای": "brown",
+  "شکلاتی": "chocolate",
+};
+
 /** Small colour swatch button. */
 function ColorSwatch({
   color,
@@ -48,15 +63,20 @@ function ColorSwatch({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={selected}
-      aria-label={color}
-      title={color}
       className={cn(
-        "grid size-9 place-items-center rounded-full border-2 transition-colors",
-        selected ? "border-primary" : "border-border hover:border-muted-foreground/50",
+        "flex items-center gap-2 rounded-full border py-1.5 ps-1.5 pe-3 text-sm transition-colors",
+        selected
+          ? "border-primary bg-primary/10 font-medium"
+          : "border-border text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground",
         disabled && "cursor-not-allowed opacity-40",
       )}
     >
-      <span className="size-6 rounded-full border" style={{ backgroundColor: hex }} />
+      <span
+        className="size-5 rounded-full border border-black/10 shadow-inner dark:border-white/25"
+        style={{ backgroundColor: hex }}
+        aria-hidden
+      />
+      <span className={cn("whitespace-nowrap", disabled && "line-through")}>{color}</span>
     </button>
   );
 }
@@ -155,6 +175,33 @@ export function ProductDetailPage() {
     return colors.map((entry) => ({ ...entry, disabled: !allowed.has(entry.color) }));
   }, [product, size, colors]);
 
+  // The catalogue artwork carries the colour in its file name
+  // (frontend/scripts/generate-product-images.mjs), so picking a colour can
+  // bring that colour's shots to the front of the gallery.
+  const images = React.useMemo(() => {
+    const list = product?.images.length
+      ? product.images
+      : [
+          {
+            id: 0,
+            productId: product?.id ?? 0,
+            url: "",
+            alt: product?.title ?? "",
+            isPrimary: true,
+            sortOrder: 0,
+          },
+        ];
+    const slug = color ? COLOR_SLUGS[color] : undefined;
+    if (!slug) return list;
+    const own = list.filter((image) => image.url.includes(`-${slug}-`));
+    return own.length ? [...own, ...list.filter((image) => !image.url.includes(`-${slug}-`))] : list;
+  }, [product, color]);
+
+  // Switching colour starts from that colour's main shot.
+  React.useEffect(() => {
+    setActiveImage(0);
+  }, [color]);
+
   if (isError) {
     return (
       <div className="container py-16">
@@ -186,7 +233,6 @@ export function ProductDetailPage() {
   }
 
   const percent = discountPercent(product);
-  const images = product.images.length ? product.images : [{ id: 0, productId: product.id, url: "", alt: product.title, isPrimary: true, sortOrder: 0 }];
   const current = images[Math.min(activeImage, images.length - 1)];
 
   function handleAddToCart() {
@@ -321,10 +367,7 @@ export function ProductDetailPage() {
           {/* colours */}
           {colorsForSize.length > 0 && (
             <div className="space-y-2">
-              <span className="text-sm font-medium">
-                رنگ
-                {color && <span className="ms-2 text-muted-foreground">{color}</span>}
-              </span>
+              <span className="text-sm font-medium">رنگ</span>
               <div className="flex flex-wrap gap-2">
                 {colorsForSize.map((entry) => (
                   <ColorSwatch
