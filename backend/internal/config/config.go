@@ -28,14 +28,6 @@ type Config struct {
 
 	RunMigrations bool
 	SeedOnStart   bool
-
-	// Hosting dashboards, CDNs and load balancers terminate TLS on their own
-	// proxy, so the socket peer is the proxy, not the visitor. Without this the
-	// rate limiter would count every visitor as one client. ProxyHeader names
-	// the header carrying the real address; reverse proxies append
-	// X-Forwarded-For by default.
-	TrustProxyHeader bool
-	ProxyHeader      string
 }
 
 // JWTConfig holds token signing material and lifetimes.
@@ -159,11 +151,6 @@ func Load() (*Config, error) {
 
 		RunMigrations: getBool("RUN_MIGRATIONS", true),
 		SeedOnStart:   getBool("SEED_ON_START", false),
-
-		// Off locally (nothing sits in front of the API), on behind a host's
-		// proxy. PROXY_HEADER only matters when TRUST_PROXY_HEADER is true.
-		TrustProxyHeader: getBool("TRUST_PROXY_HEADER", false),
-		ProxyHeader:      getEnv("PROXY_HEADER", "X-Forwarded-For"),
 	}
 
 	if err := cfg.validate(); err != nil {

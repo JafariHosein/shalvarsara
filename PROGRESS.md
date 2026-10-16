@@ -93,28 +93,6 @@ UNIQUE و هیچ قید «تک‌primary» ندارد (`migrations/000001_init.u
       مقدار قدیمی بالا آمده؛ در توسعه اهمیت ندارد چون همه‌چیز same-origin است).
 - [ ] (اختیاری) پاک‌سازی داده‌های تستی پایگاه داده — فهرست پایین.
 
-### پیش‌نمایش مشتری روی چابکان (کد آماده، منتظر پنل)
-
-مسیر انتخاب‌شده برای «رایگان + بدون فیلتر از ایران»: میزبان داخلی چابکان با اعتبار
-رایگان ثبت‌نام. همهٔ فایل‌های مخزن آماده‌اند (`DEPLOY-CHABOKAN.md`،
-`deploy/chabokan-api.env.example`، `deploy/chabokan-web.nginx.conf`،
-`scripts/deploy-chabokan-api.ps1`، `scripts/build-chabokan-web.ps1`) و کد فقط یک
-تغییر لازم داشت (`TRUST_PROXY_HEADER`). کارهای مانده همه در پنل‌اند:
-
-- [ ] حساب hub.chabokan.net + **احراز هویت** (بدون آن دامنهٔ پیش‌فرض فعال نمی‌شود).
-- [ ] نصب CLI (`npm install -g @chabokan.net/cli`) و `chabok login` — در `cmd`.
-- [ ] دیتابیس ابری PostgreSQL 16 (پلن اقتصادی) + برداشتن هاست/پورت/کاربر/رمز.
-- [ ] سرویس Docker با `backend/Dockerfile`، پورت پیش‌فرض ۸۰۸۰، Mirror روشن.
-- [ ] پر کردن و آپلود `deploy/chabokan-api.env.example` (سکرت ۳۲+ کاراکتری،
-      `TRUST_PROXY_HEADER=true`، دامنه‌ها) — هر «ذخیره» یک استقرار مجدد است.
-- [ ] `scripts/deploy-chabokan-api.ps1` → `chabok deploy` روی سرویس API.
-- [ ] سرویس Static + `scripts/build-chabokan-web.ps1 -ApiBaseUrl …` → `chabok deploy`.
-- [ ] بعد از اولین `deploy`، مسیر دائمی فایل `.env` سرویس را تعریف کن (وگرنه
-      استقرار بعدی پاکش می‌کند).
-- [ ] چک‌لیست تحویل (بخش ۸ همان سند): سلامت، سبد، ثبت‌نام، سندباکس زرین‌پال،
-      تعویض رمز مدیر، `SEED_ON_START=false`.
-- [ ] بین جلسه‌های پیش‌نمایش `chabok service stop` تا اعتبار ساعتی نسوزد.
-
 ### داده‌های تستی مانده در پایگاه داده (همه عمدی)
 
 - محصول **۵۵** (پذیرش فاز ۴) **فعال** است: «شلوار جین کارگو مردانه مدل ماجراجو»،
@@ -207,12 +185,6 @@ UNIQUE و هیچ قید «تک‌primary» ندارد (`migrations/000001_init.u
     اسکیمای فرانت هم `.url()` است (`lib/schemas.ts:149`) ⇒ ذخیرهٔ بدون تغییر URL
     خطای اعتبارسنجی می‌دهد. فاز ۶ همین را باید حل کند (پذیرش مسیر نسبی).
 
-21. **استقرار از CLI چابکان تمام فایل‌های سرویس را پاک و جایگزین می‌کند** —
-    اگر پنل فایل `.env` را در ریشهٔ سرویس ساخته باشد، اولین `deploy` حذفش می‌کند و
-    برنامه با `DATABASE_URL is required` بالا نمی‌آید. راه‌حل: مسیر فایل را در
-    «مسیرهای دائمی» (بعد از اولین `deploy` فعال می‌شود) تعریف کن. جزئیات در
-    `DEPLOY-CHABOKAN.md`.
-
 ### تله‌هایی که در کد دوباره گاز می‌گیرند
 
 - **تصویر/WebP روی این سیستم فقط با کروم:** `System.Drawing` (GDI+) نه WebP
@@ -296,7 +268,6 @@ DSN          : postgres://shalvarsara:shalvarsara@localhost:5432/shalvarsara?ssl
 | `SMS_TEST_MODE` | `true` |
 | `ZARINPAL_CALLBACK_URL` | `http://localhost:5173/payment/callback` |
 | `ZARINPAL_RESULT_URL` | `http://localhost:5173/payment/result` |
-| `TRUST_PROXY_HEADER` / `PROXY_HEADER` | `false` / `X-Forwarded-For` (پشت پروکسی میزبان `true` شود) |
 
 ### استقرار روی Render
 
@@ -309,34 +280,11 @@ rebuild. پلن free: سرویس بعد از ۱۵ دقیقه بی‌کاری م�
 دارد و دیسک پایدار ندارد (مهم برای آپلود فاز ۶). مقدار `CORS_ORIGINS` را می‌توان
 بدون اسکیم نوشت (`shop.example.com`) — `normalizeOrigins` خودش `https://` می‌گذارد.
 
-### استقرار روی چابکان (پیش‌نمایش در ایران)
-
-میزبان داخلی، بدون فیلتر از ایران. سه سرویس: هاست ابری **Docker** از
-`backend/Dockerfile` (پورت پیش‌فرض سرویس باید **۸۰۸۰** باشد — کانتینر با کاربر
-غیرروت روی ۸۰ نمی‌تواند گوش بدهد)، هاست ابری **Static** که پوشهٔ `dist/` پروژه را
-از `root /app/dist` سرو می‌کند (SPA fallback از پیش تنظیم است) و **دیتابیس ابری
-PostgreSQL 16**. حساب تازه ۱۰۰٬۰۰۰ تومان اعتبار رایگان دارد (پلن اقتصادی ~۲۹۶
-تومان/ساعت ⇒ ~۴–۵ روز برای سه سرویس) و خرید ریالی است. چابکان جلوی هر سرویس
-Reverse Proxy دارد ⇒ در تولید `TRUST_PROXY_HEADER=true` (هدر `X-Forwarded-For`)
-تا محدودکنندهٔ نرخ همه را یک آی‌پی نبیند؛ پیش‌فرض `false` است تا روی استقرار بدون
-پروکسی، هدر جعلی نتواند محدودیت را دور بزند. راهنمای گام‌به‌گام و چک‌لیست تحویل:
-`DEPLOY-CHABOKAN.md`؛ اسکریپت‌های استیج: `scripts/deploy-chabokan-api.ps1` و
-`scripts/build-chabokan-web.ps1`؛ فایل‌های پنل: `deploy/chabokan-api.env.example`
-و `deploy/chabokan-web.nginx.conf`.
-
 ### تله‌های محیط این سیستم
 
 - **`localhost` اول به `::1` (IPv6) حل می‌شود، ولی سرور Go فقط روی IPv4 گوش
   می‌دهد** → هر جا آدرس می‌دهی صریحاً `127.0.0.1` بنویس. (پروکسی Vite روی
   `http://127.0.0.1:8080` است؛ PostgreSQL با `localhost` کار می‌کند.)
-- **سه فایل Go در درخت کار CRLF هستند** (`internal/config/config.go`،
-  `internal/router/router.go`، `internal/database/database.go`) چون
-  `core.autocrlf=true` است و این سه از گیت چک‌اوت شده‌اند ⇒ `gofmt -l` آن‌ها را
-  نامرتب نشان می‌دهد در حالی که **محتوای کامیت‌شده LF و مرتب است**. برای بررسی
-  واقعی: `(Get-Content -Raw $p) -replace "\`r\`n","\`n" | gofmt -d -`. بقیهٔ
-  فایل‌ها را ابزارها با LF نوشته‌اند؛ عمداً نرمال‌سازی نکن (دیفِ کل‌فایل می‌سازد).
-- **چابکان هر بار ذخیرهٔ متغیرهای محیطی، سرویس را دوباره مستقر می‌کند** و
-  `deploy` از CLI همهٔ فایل‌های سرویس را پاک می‌کند (بخش ۲ مورد ۲۱).
 - **Windscribe (VPN)** نصب است و بالاپایین می‌شود؛ فعلاً روی localhost اثری ندارد
   ولی اگر اتصال عجیبی دیدی اول `netsh winhttp show proxy` را چک کن.
 - **Docker کار نمی‌کند** (WSL2 نصب نیست، `dockerDesktopLinuxEngine` بالا نمی‌آید)
