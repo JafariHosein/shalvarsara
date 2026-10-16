@@ -15,18 +15,21 @@
 #
 #  نکته‌های پلن free:
 #    * API پورت را از متغیر PORT می‌خواند؛ Render آن را تزریق می‌کند (پیش‌فرض ۱۰۰۰۰).
-#    * سرویس وب بعد از ۱۵ دقیقه بی‌کاری می‌خوابد (بیدار شدن ~۱ دقیقه).
+#    * سرویس **API** بعد از ۱۵ دقیقه بی‌کاری می‌خوابد (Static Site نمی‌خوابد).
 #    * دیتابیس free سی روز بعد از ساخت منقضی می‌شود و بکاپ ندارد.
 #
-#  دسترسی از ایران: ببین DEPLOY-ARVAN.md. خلاصه‌اش این است که دامنه در CDN
-#  آروان ثبت می‌شود و مبدأ همان دامنه‌های onrender.com بالا می‌ماند؛ Render
-#  دامنهٔ اختصاصی نمی‌گیرد. بعد از آماده شدن دامنه، این چهار مقدار باید عوض
-#  شوند (و سرویس وب یک بار rebuild شود):
-#      - CORS_ORIGINS            → https://<دامنه-فروشگاه>
-#      - ZARINPAL_CALLBACK_URL   → https://<دامنه-API>/api/v1/payments/callback
-#      - ZARINPAL_RESULT_URL     → https://<دامنه-فروشگاه>/payment/result
-#      - VITE_API_BASE_URL       → https://<دامنه-API>/api/v1
-#  اگر پشت پروکسی باشید، TRUST_PROXY_HEADER پایین را هم باید true نگه داری.
+#  دسترسی از ایران: ببین DEPLOY-ARVAN.md. خلاصه‌اش این است که دامنهٔ اختصاصی
+#  (`h3in.ir` و `api.h3in.ir`) اول در خودِ Render ثبت می‌شود و بعد ابرِ CDN آروان
+#  روی آن روشن می‌شود؛ مبدأ همان دامنه‌های onrender.com است و ترافیک کاربر از
+#  پاپ‌های ایران می‌گذرد.
+#
+#  ترتیب کار (وگرنه پیش‌نمایش فعلی تا زنده شدن دامنه خطا می‌دهد):
+#    ۱) `CORS_ORIGINS` همین حالا هر دو دامنه را دارد ⇒ چیزی لازم نیست.
+#    ۲) `ZARINPAL_CALLBACK_URL` / `ZARINPAL_RESULT_URL` / `VITE_API_BASE_URL` را
+#       **بعد از** زنده شدن دامنه عوض کن (مقدار نهایی‌شان کنار هر کلید کامنت است
+#       و در DEPLOY-ARVAN.md مرحلهٔ ۶ هم آمده).
+#  اگر پشت پروکسی باشید (Render و آروان هر دو پروکسی‌اند)، TRUST_PROXY_HEADER
+#  پایین باید true بماند.
 # ============================================================================
 
 services:
@@ -53,10 +56,10 @@ services:
           name: shalvarsara-db
           property: connectionString
       - key: CORS_ORIGINS
-        # Render و آروان هر دو پروکسی‌اند؛ بعد از ثبت دامنه در آروان (DEPLOY-ARVAN.md)
-        # دامنهٔ اصلیِ فروشگاه را هم به ابتدای این لیست اضافه کن:
-        #   https://shalvarsara.ir,https://www.shalvarsara.ir,https://shalvarsara-web.onrender.com,...
-        value: https://shalvarsara-web.onrender.com,http://127.0.0.1:5173,http://localhost:5173
+        # Render و آروان هر دو پروکسی‌اند. دامنهٔ اصلی از همین حالا اینجاست، پس هم
+        # پیش‌نمایش onrender و هم دامنه کار می‌کنند و بعد از زنده شدن دامنه لازم
+        # نیست این مقدار دست بخورد.
+        value: https://h3in.ir,https://www.h3in.ir,https://shalvarsara-web.onrender.com,http://127.0.0.1:5173,http://localhost:5173
       # Render (و بعداً آروان) روی TLS خودش پروکسی می‌کند؛ بدون این، محدودکنندهٔ
       # نرخ همهٔ کاربران را یک نفر می‌بیند. مستندات: backend/.env.example
       - key: TRUST_PROXY_HEADER
@@ -81,8 +84,11 @@ services:
       - key: ZARINPAL_MERCHANT_ID
         value: 00000000-0000-0000-0000-000000000000
       - key: ZARINPAL_CALLBACK_URL
+        # ⚠ بعد از زنده شدن دامنه (DEPLOY-ARVAN.md مرحلهٔ ۶) این مقدار را به
+        #   https://api.h3in.ir/api/v1/payments/callback   عوض کن.
         value: https://shalvarsara-api.onrender.com/api/v1/payments/callback
       - key: ZARINPAL_RESULT_URL
+        # ⚠ همان زمان → https://h3in.ir/payment/result
         value: https://shalvarsara-web.onrender.com/payment/result
 
   # -------------------------------------------------------------- وب‌سایت ----
@@ -102,6 +108,8 @@ services:
       - key: SKIP_INSTALL_DEPS
         value: "true"
       - key: VITE_API_BASE_URL
+        # ⚠ بعد از زنده شدن دامنه → https://api.h3in.ir/api/v1
+        #   (این مقدار در build داخل باندل پخته می‌شود ⇒ «Clear build cache & deploy»)
         value: https://shalvarsara-api.onrender.com/api/v1
       - key: VITE_APP_NAME
         value: "شلوارسرا"

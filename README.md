@@ -245,10 +245,12 @@ Render هر سه سرویس را می‌سازد و رمزهای JWT را خود
 محیطی دامنهٔ جدید، گرم نگه داشتن API، تست بدون VPN، عیب‌یابی) در
 [`DEPLOY-ARVAN.md`](DEPLOY-ARVAN.md).
 
-خلاصهٔ کاری که به کد مربوط است: بعد از آماده شدن دامنه‌ها فقط این چهار مقدار عوض
-می‌شوند و سرویس وب یک بار rebuild می‌خواهد — `CORS_ORIGINS`،
-`ZARINPAL_CALLBACK_URL` و `ZARINPAL_RESULT_URL` (سمت API) و `VITE_API_BASE_URL`
-(سمت وب، پخته‌شده در build).
+خلاصهٔ کاری که به کد مربوط است (دامنه: **`h3in.ir`** و **`api.h3in.ir`**):
+`CORS_ORIGINS` در `render.yaml` از قبل هر دو دامنه را دارد، پس بعد از زنده شدن
+دامنه فقط دو مقدار سمت API (`ZARINPAL_CALLBACK_URL` و `ZARINPAL_RESULT_URL`) و یک
+مقدار سمت وب (`VITE_API_BASE_URL`، پخته‌شده در build ⇒ یک بار «Clear build cache &
+deploy») عوض می‌شوند. این سه تا عمداً پیش از زنده شدن دامنه فعال نشده‌اند تا
+پیش‌نمایش فعلی روی `onrender.com` نشکند.
 
 ---
 
