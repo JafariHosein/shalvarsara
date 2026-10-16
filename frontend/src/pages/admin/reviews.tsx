@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Check, Eye, MessageSquareText, Search, ThumbsDown, X } from "lucide-react";
+import { Check, Eye, MessageSquareText, Search, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -191,15 +191,20 @@ export function AdminReviews() {
             </p>
           ) : (
             <div className={isFetching ? "opacity-60 transition-opacity" : undefined}>
-              <Table className="min-w-[860px]">
+              {/* `table-fixed` + percentage/narrow-column widths let the table
+                  shrink to the card instead of forcing the `overflow-auto`
+                  wrapper to scroll sideways. The wide text columns absorb the
+                  leftover width; the least important ones drop on small screens
+                  (always together with their own `TableHead`). */}
+              <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead>نظر</TableHead>
-                    <TableHead>محصول</TableHead>
-                    <TableHead>مشتری</TableHead>
-                    <TableHead className="whitespace-nowrap">تاریخ</TableHead>
-                    <TableHead className="whitespace-nowrap">وضعیت</TableHead>
-                    <TableHead className="text-end whitespace-nowrap">عملیات</TableHead>
+                    <TableHead className="hidden w-[13%] sm:table-cell">محصول</TableHead>
+                    <TableHead className="hidden w-[13%] md:table-cell">مشتری</TableHead>
+                    <TableHead className="hidden w-[10.5rem] whitespace-nowrap xl:table-cell">تاریخ</TableHead>
+                    <TableHead className="hidden w-[8rem] whitespace-nowrap sm:table-cell">وضعیت</TableHead>
+                    <TableHead className="w-[10rem] text-end whitespace-nowrap sm:w-[13.5rem]">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -207,10 +212,10 @@ export function AdminReviews() {
                     const busy = busyId === row.review.id;
                     return (
                       <TableRow key={row.review.id}>
-                        <TableCell className="max-w-md align-top">
+                        <TableCell className="align-top">
                           <RatingStars value={row.review.rating} />
                           {row.review.comment ? (
-                            <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-muted-foreground">
+                            <p className="mt-1.5 line-clamp-2 break-words text-sm leading-6 text-muted-foreground">
                               {row.review.comment}
                             </p>
                           ) : (
@@ -218,27 +223,27 @@ export function AdminReviews() {
                           )}
                         </TableCell>
 
-                        <TableCell className="align-top">
+                        <TableCell className="hidden align-top sm:table-cell">
                           <Link
                             to={`/products/${row.productSlug}`}
-                            className="line-clamp-2 min-w-40 font-medium hover:text-primary"
+                            className="line-clamp-2 break-words font-medium hover:text-primary"
                           >
                             {toFaDigits(row.productTitle)}
                           </Link>
                         </TableCell>
 
-                        <TableCell className="align-top">
-                          <span className="block font-medium">{row.author}</span>
-                          <span className="mt-0.5 block text-[11px] text-muted-foreground" dir="ltr">
+                        <TableCell className="hidden align-top md:table-cell">
+                          <span className="block break-words font-medium">{row.author}</span>
+                          <span className="mt-0.5 block break-words text-[11px] text-muted-foreground" dir="ltr">
                             {row.email}
                           </span>
                         </TableCell>
 
-                        <TableCell className="whitespace-nowrap align-top text-muted-foreground">
+                        <TableCell className="hidden whitespace-nowrap align-top text-muted-foreground xl:table-cell">
                           {formatDateTime(row.review.createdAt)}
                         </TableCell>
 
-                        <TableCell className="align-top">
+                        <TableCell className="hidden align-top sm:table-cell">
                           <Badge variant={STATUS_VARIANT[row.review.status]} className="whitespace-nowrap">
                             {REVIEW_STATUS_LABELS[row.review.status]}
                           </Badge>
@@ -266,7 +271,7 @@ export function AdminReviews() {
                               onClick={() => onModerate(row.review.id, "approved")}
                             >
                               <Check className="size-3.5" />
-                              تأیید
+                              <span className="hidden sm:inline">تأیید</span>
                             </Button>
                             <Button
                               type="button"
@@ -276,8 +281,8 @@ export function AdminReviews() {
                               disabled={busy || row.review.status === "rejected"}
                               onClick={() => onModerate(row.review.id, "rejected")}
                             >
-                              <ThumbsDown className="size-3.5" />
-                              رد
+                              <X className="size-3.5" />
+                              <span className="hidden sm:inline">رد</span>
                             </Button>
                           </div>
                         </TableCell>
@@ -374,7 +379,7 @@ export function AdminReviews() {
                   disabled={busyId === viewing.review.id || viewing.review.status === "rejected"}
                   onClick={() => onModerate(viewing.review.id, "rejected", () => setViewing(null))}
                 >
-                  <ThumbsDown />
+                  <X />
                   رد
                 </Button>
               </DialogFooter>
