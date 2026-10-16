@@ -40,5 +40,9 @@ logs/
 backend/uploads/
 frontend/uploads/
 
+# ---- Deployment staging ----
+# Produced by scripts/deploy-chabokan-api.ps1 and scripts/build-chabokan-web.ps1
+/build/
+
 # ---- OpenCode local state ----
 .opencode/.cache/

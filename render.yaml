@@ -37,6 +37,10 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      # Render جلوی سرویس یک پروکسی دارد و آی‌پی واقعی کاربر در X-Forwarded-For
+      # می‌آید؛ بدون این، محدودکنندهٔ نرخ ورود/ثبت‌نام همه را یک آی‌پی می‌بیند.
+      - key: TRUST_PROXY_HEADER
+        value: "true"
       # پورت توسط Render تزریق می‌شود (PORT=10000)؛ مقدار HTTP_PORT را ست نکن.
       - key: DATABASE_URL
         fromDatabase:
