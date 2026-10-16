@@ -194,6 +194,45 @@ docker compose run --rm backend sh -c "true"   # جایگزین: اجرا داخ
 
 ---
 
+## استقرار روی Render
+
+فایل `render.yaml` در ریشهٔ مخزن هر سه سرویس لازم را تعریف می‌کند:
+
+| سرویس | نوع | توضیح |
+|---|---|---|
+| `shalvarsara-api` | Web Service (Docker) | API از `backend/Dockerfile` |
+| `shalvarsara-web` | Static Site | خروجی `npm run build` از `frontend/` |
+| `shalvarsara-db` | PostgreSQL 16 | پلن `free` |
+
+مراحل:
+
+۱) در داشبورد Render: **New → Blueprint** و انتخاب همین مخزن (شاخهٔ `main`).
+Render هر سه سرویس را می‌سازد و رمزهای JWT را خودش تولید می‌کند.
+۲) اگر نام سرویس‌ها را عوض کردی، در سرویس API مقدارهای `CORS_ORIGINS`،
+`ZARINPAL_CALLBACK_URL` و `ZARINPAL_RESULT_URL` و در سرویس وب مقدار
+`VITE_API_BASE_URL` را به دامنه‌های تازه تغییر بده و یک بار rebuild کن
+(این مقدار در زمان build داخل باندل پخته می‌شود).
+۳) ورود مدیر: `admin@example.com` / `Admin@12345` — **پیش از اشتراک‌گذاری عمومی،
+`ADMIN_PASSWORD` را در پنل Render عوض کن.**
+۴) `SEED_ON_START=true` است و seeder تکراری نمی‌سازد (اگر محصولی موجود باشد رد می‌شود).
+
+محدودیت‌های پلن free:
+
+- سرویس وب بعد از ۱۵ دقیقه بی‌کاری می‌خوابد؛ بیدار شدنش ~۱ دقیقه است.
+- دیتابیس free سی روز بعد از ساخت منقضی می‌شود (۱ GB، بدون بکاپ). برای دائمی‌شدن
+  کوچک‌ترین پلن پرداختی را بگیر یا `DATABASE_URL` را به یک دیتابیس بیرونی
+  (Neon/Supabase) با `?sslmode=require` بده.
+- دیسک پایدار روی پلن free وجود ندارد → فایل‌های آپلودی (فاز ۶) روی این استقرار
+  ماندگار نمی‌مانند؛ مسیر درست، لایهٔ ذخیره‌سازی شیئی (S3/R2) است.
+
+> اگر خودت دستی سرویس می‌سازی (بدون Blueprint): در سرویس API مسیر Dockerfile را
+> `backend/Dockerfile`، Build Context را `backend` و Health Check را
+> `/api/v1/health` بگذار؛ سرویس وب بهتر است Static Site با
+> `cd frontend && npm ci && npm run build` و Publish Directory برابر
+> `frontend/dist` باشد.
+
+---
+
 ## راه‌اندازی برای توسعه
 
 **۱) پایگاه داده را بالا بیاورید**

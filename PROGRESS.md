@@ -260,7 +260,7 @@ DSN          : postgres://shalvarsara:shalvarsara@localhost:5432/shalvarsara?ssl
 | کلید | مقدار |
 |---|---|
 | `APP_ENV` | `development` |
-| `HTTP_PORT` | `8080` |
+| `HTTP_PORT` | `8080` (اگر ست نشده باشد `PORT` خوانده می‌شود — میزبان‌هایی مثل Render آن را تزریق می‌کنند) |
 | `CORS_ORIGINS` | `http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173` |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `720h` |
 | `RUN_MIGRATIONS` / `SEED_ON_START` | `true` / `false` |
@@ -268,6 +268,17 @@ DSN          : postgres://shalvarsara:shalvarsara@localhost:5432/shalvarsara?ssl
 | `SMS_TEST_MODE` | `true` |
 | `ZARINPAL_CALLBACK_URL` | `http://localhost:5173/payment/callback` |
 | `ZARINPAL_RESULT_URL` | `http://localhost:5173/payment/result` |
+
+### استقرار روی Render
+
+`render.yaml` در ریشهٔ مخزن سه سرویس می‌سازد: `shalvarsara-api` (Web Service با
+Docker از `backend/Dockerfile`، context `backend/`)، `shalvarsara-web` (Static Site
+از `frontend/dist`) و `shalvarsara-db` (Postgres 16، پلن free). سرویس API پورت را
+از `PORT` می‌گیرد (پیش‌فرض Render: ۱۰۰۰۰) پس روی Render `HTTP_PORT` ست نشود.
+`VITE_API_BASE_URL` در زمان build داخل باندل پخته می‌شود ⇒ تغییر دامنهٔ API یعنی
+rebuild. پلن free: سرویس بعد از ۱۵ دقیقه بی‌کاری می‌خوابد، دیتابیس **۳۰ روز** عمر
+دارد و دیسک پایدار ندارد (مهم برای آپلود فاز ۶). مقدار `CORS_ORIGINS` را می‌توان
+بدون اسکیم نوشت (`shop.example.com`) — `normalizeOrigins` خودش `https://` می‌گذارد.
 
 ### تله‌های محیط این سیستم
 

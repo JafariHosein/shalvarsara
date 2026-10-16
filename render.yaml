@@ -1,0 +1,107 @@
+# ============================================================================
+#  شلوارسرا — استقرار روی Render (Blueprint)
+#
+#  Render این فایل را از ریشهٔ مخزن می‌خواند و سه سرویس می‌سازد:
+#    ۱) shalvarsara-api : API (Go + Fiber) با تصویر ساخته‌شده از backend/Dockerfile
+#    ۲) shalvarsara-web : فروشگاه (خروجی npm run build) به‌صورت Static Site
+#    ۳) shalvarsara-db  : PostgreSQL 16 روی پلن free
+#
+#  ⚠ اگر نام سرویس‌ها را عوض کردی، این چهار مقدار را هم عوض کن:
+#      - CORS_ORIGINS                                    (سرویس API)
+#      - ZARINPAL_CALLBACK_URL و ZARINPAL_RESULT_URL      (سرویس API)
+#      - VITE_API_BASE_URL                                (سرویس وب)
+#    (مقدار VITE_API_BASE_URL در زمان build داخل باندل پخته می‌شود، پس بعد از
+#     تغییرش یک بار rebuild لازم است.)
+#
+#  نکته‌های پلن free:
+#    * API پورت را از متغیر PORT می‌خواند؛ Render آن را تزریق می‌کند (پیش‌فرض ۱۰۰۰۰).
+#    * سرویس وب بعد از ۱۵ دقیقه بی‌کاری می‌خوابد (بیدار شدن ~۱ دقیقه).
+#    * دیتابیس free سی روز بعد از ساخت منقضی می‌شود و بکاپ ندارد.
+# ============================================================================
+
+services:
+  # ------------------------------------------------------------------ API ----
+  - type: web
+    name: shalvarsara-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/v1/health
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: APP_ENV
+        value: production
+      # پورت توسط Render تزریق می‌شود (PORT=10000)؛ مقدار HTTP_PORT را ست نکن.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shalvarsara-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: https://shalvarsara-web.onrender.com,http://127.0.0.1:5173,http://localhost:5173
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: SEED_ON_START
+        value: "true"
+      - key: ADMIN_NAME
+        value: "مدیر فروشگاه"
+      - key: ADMIN_EMAIL
+        value: admin@example.com
+      # ⚠ رمز نمونه — پیش از اشتراک‌گذاری عمومی در پنل Render عوضش کن.
+      - key: ADMIN_PASSWORD
+        value: Admin@12345
+      - key: ZARINPAL_SANDBOX
+        value: "true"
+      - key: ZARINPAL_MERCHANT_ID
+        value: 00000000-0000-0000-0000-000000000000
+      - key: ZARINPAL_CALLBACK_URL
+        value: https://shalvarsara-api.onrender.com/api/v1/payments/callback
+      - key: ZARINPAL_RESULT_URL
+        value: https://shalvarsara-web.onrender.com/payment/result
+
+  # -------------------------------------------------------------- وب‌سایت ----
+  - type: web
+    name: shalvarsara-web
+    runtime: static
+    autoDeployTrigger: commit
+    buildCommand: cd frontend && npm ci --no-audit --no-fund && npm run build
+    staticPublishPath: ./frontend/dist
+    buildFilter:
+      paths:
+        - frontend/**
+        - render.yaml
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+      - key: VITE_API_BASE_URL
+        value: https://shalvarsara-api.onrender.com/api/v1
+      - key: VITE_APP_NAME
+        value: "شلوارسرا"
+    routes:
+      # مسیرهای کلاینت‌ساید (react-router): هر مسیر ناشناس → index.html
+      - type: rewrite
+        source: "/*"
+        destination: /index.html
+    headers:
+      # فایل‌های هش‌دار Vite هرگز عوض نمی‌شوند.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+
+# ------------------------------------------------------------- پایگاه داده ----
+databases:
+  - name: shalvarsara-db
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"

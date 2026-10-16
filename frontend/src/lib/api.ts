@@ -1,6 +1,22 @@
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./token";
 
-const RAW_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api/v1").replace(/\/+$/, "");
+/** Resolves the build-time API base URL.
+ *
+ *  Accepts a full URL (`https://api.example.com/api/v1`), a bare host
+ *  (`api.example.com`, handy when a host only exposes a hostname) or a
+ *  relative path (`/api/v1`, meaning same origin). A missing `/api/v1`
+ *  suffix is appended.
+ */
+function resolveBase(raw: string | undefined): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "/api/v1";
+  if (value.startsWith("/")) return value.replace(/\/+$/, "") || "/api/v1";
+  const qualified = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  const trimmed = qualified.replace(/\/+$/, "");
+  return /\/api(\/|$)/.test(trimmed) ? trimmed : `${trimmed}/api/v1`;
+}
+
+const RAW_BASE = resolveBase(import.meta.env.VITE_API_BASE_URL);
 
 /** Absolute base URL, resolved against the current origin when relative. */
 const BASE = RAW_BASE.startsWith("http") ? RAW_BASE : new URL(RAW_BASE, window.location.origin).toString().replace(/\/+$/, "");

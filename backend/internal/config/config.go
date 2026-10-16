@@ -111,9 +111,11 @@ func Load() (*Config, error) {
 	_ = godotenv.Load(".env")
 
 	cfg := &Config{
-		AppEnv:      getEnv("APP_ENV", "development"),
-		HTTPPort:    getEnv("HTTP_PORT", "8080"),
-		CORSOrigins: splitAndTrim(getEnv("CORS_ORIGINS", "http://localhost:5173")),
+		AppEnv: getEnv("APP_ENV", "development"),
+		// HTTP_PORT wins locally (docker compose, .env); hosts such as Render
+		// only inject PORT, so fall back to it before defaulting.
+		HTTPPort:    getEnv("HTTP_PORT", getEnv("PORT", "8080")),
+		CORSOrigins: normalizeOrigins(splitAndTrim(getEnv("CORS_ORIGINS", "http://localhost:5173"))),
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 
 		JWT: JWTConfig{
@@ -235,6 +237,25 @@ func splitAndTrim(csv string) []string {
 		if t := strings.TrimSpace(p); t != "" {
 			out = append(out, t)
 		}
+	}
+	return out
+}
+
+// normalizeOrigins makes CORS entries comparable with the browser's Origin
+// header. Full origins pass through untouched; a bare host (as pasted from a
+// hosting dashboard, e.g. "shop.example.com") becomes "https://shop.example.com".
+// A trailing slash is dropped because the Origin header never carries one.
+func normalizeOrigins(origins []string) []string {
+	out := make([]string, 0, len(origins))
+	for _, o := range origins {
+		o = strings.TrimRight(o, "/")
+		if o == "" {
+			continue
+		}
+		if o != "*" && !strings.Contains(o, "://") {
+			o = "https://" + o
+		}
+		out = append(out, o)
 	}
 	return out
 }
