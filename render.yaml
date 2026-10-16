@@ -23,11 +23,11 @@
 #  روی آن روشن می‌شود؛ مبدأ همان دامنه‌های onrender.com است و ترافیک کاربر از
 #  پاپ‌های ایران می‌گذرد.
 #
-#  ترتیب کار (وگرنه پیش‌نمایش فعلی تا زنده شدن دامنه خطا می‌دهد):
-#    ۱) `CORS_ORIGINS` همین حالا هر دو دامنه را دارد ⇒ چیزی لازم نیست.
-#    ۲) `ZARINPAL_CALLBACK_URL` / `ZARINPAL_RESULT_URL` / `VITE_API_BASE_URL` را
-#       **بعد از** زنده شدن دامنه عوض کن (مقدار نهایی‌شان کنار هر کلید کامنت است
-#       و در DEPLOY-ARVAN.md مرحلهٔ ۶ هم آمده).
+#  ✅ دامنه زنده شده و گواهی Render برای هر سه دامنه صادر شده است؛ پس
+#  `ZARINPAL_CALLBACK_URL` / `ZARINPAL_RESULT_URL` / `VITE_API_BASE_URL` روی
+#  دامنهٔ نهایی ست‌اند (مرحلهٔ ۶ در DEPLOY-ARVAN.md انجام شد).
+#  ⚠️ `VITE_API_BASE_URL` در زمان **build** داخل باندل پخته می‌شود ⇒ بعد از تغییر
+#  آن، سرویس وب باید یک‌بار «Clear build cache & deploy» شود.
 #  اگر پشت پروکسی باشید (Render و آروان هر دو پروکسی‌اند)، TRUST_PROXY_HEADER
 #  پایین باید true بماند.
 # ============================================================================
@@ -83,13 +83,12 @@ services:
         value: "true"
       - key: ZARINPAL_MERCHANT_ID
         value: 00000000-0000-0000-0000-000000000000
+      # مسیر بازگشت زرین‌پال از پشت آروان می‌گذرد؛ باید روی دامنهٔ API باشد.
+      # (درگاه همچنان سندباکس است: ZARINPAL_SANDBOX=true پایین دست‌نخورده.)
       - key: ZARINPAL_CALLBACK_URL
-        # ⚠ بعد از زنده شدن دامنه (DEPLOY-ARVAN.md مرحلهٔ ۶) این مقدار را به
-        #   https://api.h3in.ir/api/v1/payments/callback   عوض کن.
-        value: https://shalvarsara-api.onrender.com/api/v1/payments/callback
+        value: https://api.h3in.ir/api/v1/payments/callback
       - key: ZARINPAL_RESULT_URL
-        # ⚠ همان زمان → https://h3in.ir/payment/result
-        value: https://shalvarsara-web.onrender.com/payment/result
+        value: https://h3in.ir/payment/result
 
   # -------------------------------------------------------------- وب‌سایت ----
   - type: web
@@ -108,9 +107,8 @@ services:
       - key: SKIP_INSTALL_DEPS
         value: "true"
       - key: VITE_API_BASE_URL
-        # ⚠ بعد از زنده شدن دامنه → https://api.h3in.ir/api/v1
-        #   (این مقدار در build داخل باندل پخته می‌شود ⇒ «Clear build cache & deploy»)
-        value: https://shalvarsara-api.onrender.com/api/v1
+        # ⚠ در build داخل باندل پخته می‌شود ⇒ بعد از تغییرش «Clear build cache & deploy».
+        value: https://api.h3in.ir/api/v1
       - key: VITE_APP_NAME
         value: "شلوارسرا"
     routes:

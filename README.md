@@ -246,11 +246,13 @@ Render هر سه سرویس را می‌سازد و رمزهای JWT را خود
 [`DEPLOY-ARVAN.md`](DEPLOY-ARVAN.md).
 
 خلاصهٔ کاری که به کد مربوط است (دامنه: **`h3in.ir`** و **`api.h3in.ir`**):
-`CORS_ORIGINS` در `render.yaml` از قبل هر دو دامنه را دارد، پس بعد از زنده شدن
-دامنه فقط دو مقدار سمت API (`ZARINPAL_CALLBACK_URL` و `ZARINPAL_RESULT_URL`) و یک
-مقدار سمت وب (`VITE_API_BASE_URL`، پخته‌شده در build ⇒ یک بار «Clear build cache &
-deploy») عوض می‌شوند. این سه تا عمداً پیش از زنده شدن دامنه فعال نشده‌اند تا
-پیش‌نمایش فعلی روی `onrender.com` نشکند.
+`CORS_ORIGINS` هر دو دامنه را دارد و هر سه مقدار دامنه‌ای هم فعال‌اند
+(`ZARINPAL_CALLBACK_URL` → `https://api.h3in.ir/api/v1/payments/callback`،
+`ZARINPAL_RESULT_URL` → `https://h3in.ir/payment/result`، `VITE_API_BASE_URL` →
+`https://api.h3in.ir/api/v1`). چون `VITE_API_BASE_URL` در زمان build داخل باندل
+پخته می‌شود، سرویس وب باید یک بار **«Clear build cache & deploy»** شود وگرنه سایت
+بالا می‌آید ولی هیچ داده‌ای از API نمی‌گیرد. درگاه همچنان **سندباکس** است
+(`ZARINPAL_SANDBOX=true` و مرچنت‌آیدی نمونه) — فقط پرداخت واقعی خواستِ صریح لازم دارد.
 
 ---
 
