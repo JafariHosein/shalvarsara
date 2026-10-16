@@ -206,9 +206,9 @@ export function HomePage() {
                 >
                   <SmartImage
                     src="/hero/hero-1.webp"
-                    alt="استایل زنانه با شلوار جین"
+                    alt="چند شلوار جین و پارچه‌ای تاشده در رنگ‌های آبی، بژ و مشکی"
                     loading="eager"
-                    wrapperClassName="aspect-[4/5] w-full"
+                    wrapperClassName="aspect-square w-full"
                     className="transition-transform duration-500 ease-out group-hover:scale-[1.03]"
                   />
                 </Link>
@@ -234,9 +234,9 @@ export function HomePage() {
                 >
                   <SmartImage
                     src="/hero/hero-2.webp"
-                    alt="استایل مردانه با شلوار پارچه‌ای"
+                    alt="مجموعهٔ چهار شلوار جین و پارچه‌ای در رنگ‌های آبی، سرمه‌ای، بژ و مشکی"
                     loading="eager"
-                    wrapperClassName="aspect-[4/5] w-full"
+                    wrapperClassName="aspect-square w-full"
                     className="transition-transform duration-500 ease-out group-hover:scale-[1.03]"
                   />
                 </Link>
