@@ -146,10 +146,10 @@ function ReviewItem({ review }: { review: ProductReview }) {
         <span className="ms-auto text-xs text-muted-foreground">{formatDate(review.createdAt)}</span>
       </div>
 
-      <p className="mt-1.5 text-sm font-semibold">{review.author}</p>
+      <p className="mt-1.5 break-words text-sm font-semibold">{review.author}</p>
 
       {review.comment ? (
-        <p className="mt-2 whitespace-pre-line text-sm leading-7 text-muted-foreground">{review.comment}</p>
+        <p className="mt-2 whitespace-pre-line break-words text-sm leading-7 text-muted-foreground">{review.comment}</p>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">این خریدار فقط امتیاز داده است.</p>
       )}
