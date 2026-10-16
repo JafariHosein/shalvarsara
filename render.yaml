@@ -17,6 +17,16 @@
 #    * API پورت را از متغیر PORT می‌خواند؛ Render آن را تزریق می‌کند (پیش‌فرض ۱۰۰۰۰).
 #    * سرویس وب بعد از ۱۵ دقیقه بی‌کاری می‌خوابد (بیدار شدن ~۱ دقیقه).
 #    * دیتابیس free سی روز بعد از ساخت منقضی می‌شود و بکاپ ندارد.
+#
+#  دسترسی از ایران: ببین DEPLOY-ARVAN.md. خلاصه‌اش این است که دامنه در CDN
+#  آروان ثبت می‌شود و مبدأ همان دامنه‌های onrender.com بالا می‌ماند؛ Render
+#  دامنهٔ اختصاصی نمی‌گیرد. بعد از آماده شدن دامنه، این چهار مقدار باید عوض
+#  شوند (و سرویس وب یک بار rebuild شود):
+#      - CORS_ORIGINS            → https://<دامنه-فروشگاه>
+#      - ZARINPAL_CALLBACK_URL   → https://<دامنه-API>/api/v1/payments/callback
+#      - ZARINPAL_RESULT_URL     → https://<دامنه-فروشگاه>/payment/result
+#      - VITE_API_BASE_URL       → https://<دامنه-API>/api/v1
+#  اگر پشت پروکسی باشید، TRUST_PROXY_HEADER پایین را هم باید true نگه داری.
 # ============================================================================
 
 services:
@@ -43,7 +53,14 @@ services:
           name: shalvarsara-db
           property: connectionString
       - key: CORS_ORIGINS
+        # Render و آروان هر دو پروکسی‌اند؛ بعد از ثبت دامنه در آروان (DEPLOY-ARVAN.md)
+        # دامنهٔ اصلیِ فروشگاه را هم به ابتدای این لیست اضافه کن:
+        #   https://shalvarsara.ir,https://www.shalvarsara.ir,https://shalvarsara-web.onrender.com,...
         value: https://shalvarsara-web.onrender.com,http://127.0.0.1:5173,http://localhost:5173
+      # Render (و بعداً آروان) روی TLS خودش پروکسی می‌کند؛ بدون این، محدودکنندهٔ
+      # نرخ همهٔ کاربران را یک نفر می‌بیند. مستندات: backend/.env.example
+      - key: TRUST_PROXY_HEADER
+        value: "true"
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET

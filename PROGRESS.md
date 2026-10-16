@@ -81,6 +81,34 @@ UNIQUE و هیچ قید «تک‌primary» ندارد (`migrations/000001_init.u
 - [ ] مهاجرت refresh token از `localStorage` به کوکی httpOnly + محافظت CSRF.
 - [ ] هدرهای امنیتی (CSP، HSTS) و محدودیت نرخ روی مسیرهای عمومی.
 
+### پیش‌نمایش مشتری از داخل ایران — **CDN آروان روی Render** (راهنمای گام‌به‌گام: `DEPLOY-ARVAN.md`)
+
+انتخاب کاربر: به‌جای میزبان ایرانی، همان استقرار Render می‌ماند و یک دامنه از طریق
+CDN رایگان آروان به پاپ‌های ایران می‌آید. کارهای مخزن **انجام شده** (کامیت
+«آروان: آی‌پی واقعی کاربر پشت پروکسی + راهنمای CDN»): `TRUST_PROXY_HEADER`/
+`PROXY_HEADER` در بک‌اند، `TRUST_PROXY_HEADER=true` در `render.yaml`، و
+`DEPLOY-ARVAN.md`. باقی‌مانده فقط پنل است:
+
+- [ ] دامنه: تصمیم بگیر `.ir` (پیشنهاد) یا دامنهٔ رایگان با NS قابل‌تغییر.
+- [ ] آروان: «افزودن دامنهٔ جدید» (بدون `www`/`http`) → ست کردن NS در ثبت‌کننده →
+      «بررسی نام‌سرور». ⚠ قبلش رکوردهای MX/ایمیل را چک کن.
+- [ ] رکوردها **با ابر خاموش**: `www` و `api` به دامنه‌های `onrender.com`، ریشه
+      (`@`) به مقدار A‌ای که خود Render می‌دهد.
+- [ ] در Render، دامنهٔ اختصاصی هر دو سرویس را اضافه کن و صبر کن Verified + گواهی
+      صادر شود. **اگر این را نکنی، آروان باید `Host` را بازنویسی کند و Render
+      ۴۰۴ می‌دهد** (لبهٔ Render با `Host` مسیریابی می‌کند).
+- [ ] ابر آروان را روشن کن + SSL را روی حالت کامل + هدایت اجباری HTTPS.
+- [ ] کش: برای دامنهٔ API **کامل خاموش** (وگرنه ۳۰۲ مسیر
+      `/api/v1/payments/callback` ممکن است به کاربر دیگری برود)؛ برای فروشگاه
+      `/assets/*` طولانی و `index.html` کوتاه/بدون کش.
+- [ ] چهار مقدار دامنه‌ای: `CORS_ORIGINS` / `ZARINPAL_CALLBACK_URL` /
+      `ZARINPAL_RESULT_URL` (API) و `VITE_API_BASE_URL` (وب) → سپس
+      **rebuild با «Clear build cache»** برای سرویس وب + هم‌سان کردن `render.yaml`.
+- [ ] گرم نگه داشتن API با پینگر رایگان هر ۵ دقیقه (UptimeRobot/cron-job.org) —
+      وگرنه اولین بازدید مشتری ممکن است از سمت آروان تایم‌اوت بخورد.
+- [ ] تست بدون VPN از موبایل: صفحهٔ اصلی، محصول، سبد، لاگین، پرداخت سندباکس،
+      پنل ادمین.
+
 ### کارهای کوچک پیش از راه‌اندازی
 
 - [ ] 🔴 مقادیر تماس در `frontend/src/lib/contact.ts` **نمونه**اند (شناسهٔ تلگرام،
@@ -264,6 +292,7 @@ DSN          : postgres://shalvarsara:shalvarsara@localhost:5432/shalvarsara?ssl
 | `CORS_ORIGINS` | `http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173` |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `720h` |
 | `RUN_MIGRATIONS` / `SEED_ON_START` | `true` / `false` |
+| `TRUST_PROXY_HEADER` / `PROXY_HEADER` | `false` / `X-Forwarded-For` — محلی **خاموش** بماند تا هدر قابل جعل نباشد؛ روی Render/پشت CDN `true` |
 | `ZARINPAL_SANDBOX` | `true` |
 | `SMS_TEST_MODE` | `true` |
 | `ZARINPAL_CALLBACK_URL` | `http://localhost:5173/payment/callback` |
@@ -276,9 +305,21 @@ Docker از `backend/Dockerfile`، context `backend/`)، `shalvarsara-web` (Stat
 از `frontend/dist`) و `shalvarsara-db` (Postgres 16، پلن free). سرویس API پورت را
 از `PORT` می‌گیرد (پیش‌فرض Render: ۱۰۰۰۰) پس روی Render `HTTP_PORT` ست نشود.
 `VITE_API_BASE_URL` در زمان build داخل باندل پخته می‌شود ⇒ تغییر دامنهٔ API یعنی
-rebuild. پلن free: سرویس بعد از ۱۵ دقیقه بی‌کاری می‌خوابد، دیتابیس **۳۰ روز** عمر
-دارد و دیسک پایدار ندارد (مهم برای آپلود فاز ۶). مقدار `CORS_ORIGINS` را می‌توان
-بدون اسکیم نوشت (`shop.example.com`) — `normalizeOrigins` خودش `https://` می‌گذارد.
+rebuild. پلن free: سرویس **API** بعد از ۱۵ دقیقه بی‌کاری می‌خوابد (Static Site
+نمی‌خوابد)، دیتابیس **۳۰ روز** عمر دارد و دیسک پایدار ندارد (مهم برای آپلود فاز ۶).
+مقدار `CORS_ORIGINS` را می‌توان بدون اسکیم نوشت (`shop.example.com`) —
+`normalizeOrigins` خودش `https://` می‌گذارد.
+
+**دسترسی از ایران:** `TRUST_PROXY_HEADER=true` در `render.yaml` ست است (Render و
+آروان هر دو پروکسی‌اند؛ بدون آن محدودکنندهٔ نرخ همه را یک آی‌پی می‌بیند). مسیر
+دامنه + CDN آروان در `DEPLOY-ARVAN.md`. اگر خواستی برگردی به میزبان ایرانی،
+استقرار چابکان (با CLI و اسکریپت‌های استیج) در تاریخچهٔ گیت است: کامیت `0eb7cc7`
+و فایل `DEPLOY-CHABOKAN.md` در همان کامیت (در Revert بعدی حذف شده).
+
+> **تلهٔ پینگر برای گرم نگه داشتن:** GitHub Actions در مخزن **پرایوت** هر اجرا
+> حداقل ۱ دقیقه از سهمیهٔ ۲۰۰۰ دقیقه‌ای ماهانه می‌خورد؛ پینگ ۵ دقیقه‌ای ≈ ۸۶۰۰
+> دقیقه در ماه ⇒ به‌جای آن از پینگر بیرونی رایگان (UptimeRobot/cron-job.org)
+> استفاده کن یا سرویس را بین جلسات بخوابان.
 
 ### تله‌های محیط این سیستم
 

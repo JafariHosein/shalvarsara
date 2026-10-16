@@ -43,6 +43,7 @@ func New(d Deps) *fiber.App {
 		DisableStartupMessage: true,
 		ReadTimeout:           10 * time.Second,
 		WriteTimeout:          20 * time.Second,
+		ProxyHeader:           proxyHeader(d.Config),
 		ErrorHandler:          errorHandler,
 	})
 
@@ -210,6 +211,17 @@ func New(d Deps) *fiber.App {
 	})
 
 	return app
+}
+
+// proxyHeader returns the header carrying the real client address. It is empty
+// unless the host puts a proxy in front of the API (Render, Arvan, ...): read
+// from the socket instead, so a spoofed header cannot dodge the rate limiter on
+// a bare deployment.
+func proxyHeader(cfg *config.Config) string {
+	if !cfg.TrustProxyHeader {
+		return ""
+	}
+	return cfg.ProxyHeader
 }
 
 // errorHandler renders Fiber-level errors (e.g. bad JSON) in the shared shape.
