@@ -18,7 +18,7 @@ export function Logo({ className, withText = true }: { className?: string; withT
       {withText && (
         <span className="flex flex-col leading-none">
           <span className="text-base font-extrabold tracking-tight">شلوارسرا</span>
-          <span className="text-[10px] font-medium text-muted-foreground">فقط شلوار، همیشه</span>
+          <span className="text-[10px] font-medium text-muted-foreground">پا به پای استایل‌ت</span>
         </span>
       )}
     </Link>

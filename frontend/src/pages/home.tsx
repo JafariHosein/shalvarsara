@@ -137,8 +137,6 @@ export function HomePage() {
   const discounted = useProducts({ sort: "discount", limit: 4 });
   const popular = useProducts({ sort: "popular", limit: 4 });
 
-  const heroProduct = featured.data?.items[0];
-
   return (
     <div className="pb-4">
       {/* ---------- hero ---------- */}
@@ -161,9 +159,9 @@ export function HomePage() {
             </Badge>
 
             <h1 className="text-3xl font-black leading-[1.35] text-balance sm:text-4xl md:text-5xl md:leading-[1.3]">
-              سایزی که اندازه است،
+              قیافه‌ات را
               <br />
-              جنسی که <span className="text-primary">دوام</span> دارد.
+              <span className="text-primary">شلوارت</span> می‌سازد.
             </h1>
 
             <p className="max-w-lg text-base leading-8 text-muted-foreground text-pretty">
@@ -202,21 +200,18 @@ export function HomePage() {
           <div className="relative mx-auto w-full max-w-md">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-4 pt-8">
-                {heroProduct ? (
-                  <Link
-                    to={`/products/${heroProduct.slug}`}
-                    className="group block overflow-hidden rounded-xl bg-card shadow-[var(--shadow-border)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[var(--shadow-border-hover)]"
-                  >
-                    <SmartImage
-                      src={heroProduct.images[0]?.url}
-                      alt={heroProduct.title}
-                      wrapperClassName="aspect-[4/5] w-full"
-                      className="transition-transform duration-500 ease-out group-hover:scale-[1.03]"
-                    />
-                  </Link>
-                ) : (
-                  <Skeleton className="aspect-[4/5] w-full rounded-xl" />
-                )}
+                <Link
+                  to="/products"
+                  className="group block overflow-hidden rounded-xl bg-card shadow-[var(--shadow-border)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[var(--shadow-border-hover)]"
+                >
+                  <SmartImage
+                    src="/hero/hero-1.webp"
+                    alt="استایل زنانه با شلوار جین"
+                    loading="eager"
+                    wrapperClassName="aspect-[4/5] w-full"
+                    className="transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+                  />
+                </Link>
                 <div className="rounded-xl bg-card p-4 shadow-[var(--shadow-border)]">
                   <p className="text-xs text-muted-foreground">جدول سایز دقیق</p>
                   <p className="mt-1 text-sm font-semibold text-pretty">دور کمر، دم پا و قد را مقایسه کنید</p>
@@ -229,23 +224,22 @@ export function HomePage() {
 
               <div className="space-y-4">
                 <div className="rounded-xl bg-primary p-4 text-primary-foreground shadow-[var(--shadow-border)]">
-                  <p className="text-xs opacity-80">تخفیف هفتگی</p>
-                  <p className="mt-1 text-3xl font-black">۳۰٪</p>
-                  <p className="mt-1 text-xs opacity-90 text-pretty">روی مدل‌های منتخب جین</p>
+                  <p className="text-xs font-semibold">تخفیف هفتگی</p>
+                  <p className="mt-1 text-3xl font-black leading-none">۳۰٪</p>
+                  <p className="mt-1.5 text-xs font-medium text-pretty">روی مدل‌های منتخب جین</p>
                 </div>
-                {featured.data?.items[1] && (
-                  <Link
-                    to={`/products/${featured.data.items[1].slug}`}
-                    className="group block overflow-hidden rounded-xl bg-card shadow-[var(--shadow-border)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[var(--shadow-border-hover)]"
-                  >
-                    <SmartImage
-                      src={featured.data.items[1].images[0]?.url}
-                      alt={featured.data.items[1].title}
-                      wrapperClassName="aspect-[4/5] w-full"
-                      className="transition-transform duration-500 ease-out group-hover:scale-[1.03]"
-                    />
-                  </Link>
-                )}
+                <Link
+                  to="/products"
+                  className="group block overflow-hidden rounded-xl bg-card shadow-[var(--shadow-border)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[var(--shadow-border-hover)]"
+                >
+                  <SmartImage
+                    src="/hero/hero-2.webp"
+                    alt="استایل مردانه با شلوار پارچه‌ای"
+                    loading="eager"
+                    wrapperClassName="aspect-[4/5] w-full"
+                    className="transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+                  />
+                </Link>
               </div>
             </div>
           </div>

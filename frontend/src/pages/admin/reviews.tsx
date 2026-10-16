@@ -1,10 +1,18 @@
 import * as React from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Check, MessageSquareText, Search, ThumbsDown, X } from "lucide-react";
+import { Check, Eye, MessageSquareText, Search, ThumbsDown, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,7 +23,7 @@ import { PaginationBar } from "@/components/common/pagination-bar";
 import { RatingStars } from "@/components/product/rating-stars";
 import { useAdminReviews, useUpdateReviewStatus } from "@/hooks/use-admin";
 import { formatDateTime, formatNumber, toFaDigits } from "@/lib/format";
-import { REVIEW_STATUS_LABELS, type AdminReviewQuery, type ReviewStatus } from "@/types/api";
+import { REVIEW_STATUS_LABELS, type AdminReviewQuery, type AdminReviewRow, type ReviewStatus } from "@/types/api";
 
 const PAGE_SIZE = 20;
 
@@ -58,6 +66,8 @@ export function AdminReviews() {
 
   const moderate = useUpdateReviewStatus();
   const [busyId, setBusyId] = React.useState<number | null>(null);
+  /** The row whose full text is open in the detail dialog, if any. */
+  const [viewing, setViewing] = React.useState<AdminReviewRow | null>(null);
 
   const query: AdminReviewQuery = React.useMemo(
     () => ({ q: q || undefined, status, page, limit: PAGE_SIZE }),
@@ -92,9 +102,16 @@ export function AdminReviews() {
   const filtersApplied = q !== "" || status !== "pending";
 
   /** Moderate one row; the queue refetches and, with the pending filter, the row leaves. */
-  const onModerate = (id: number, next: ReviewStatus) => {
+  const onModerate = (id: number, next: ReviewStatus, onSuccess?: () => void) => {
     setBusyId(id);
-    moderate.mutate({ id, status: next }, { onSettled: () => setBusyId(null) });
+    moderate.mutate(
+      { id, status: next },
+      {
+        // The dialog closes only on success; the row buttons pass nothing.
+        onSuccess: () => onSuccess?.(),
+        onSettled: () => setBusyId(null),
+      },
+    );
   };
 
   return (
@@ -231,6 +248,17 @@ export function AdminReviews() {
                           <div className="flex items-center justify-end gap-1.5">
                             <Button
                               type="button"
+                              size="icon"
+                              variant="outline"
+                              className="size-9"
+                              title="مشاهدهٔ کامل"
+                              aria-label="مشاهدهٔ کامل"
+                              onClick={() => setViewing(row)}
+                            >
+                              <Eye className="size-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
                               size="sm"
                               variant="outline"
                               className="gap-1 whitespace-nowrap text-success"
@@ -271,6 +299,89 @@ export function AdminReviews() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+        <DialogContent className="sm:max-w-lg">
+          {viewing ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-start">مشاهدهٔ کامل نظر</DialogTitle>
+                <DialogDescription className="text-start">
+                  متن کامل و مشخصات این نظر را پیش از تأیید یا رد ببینید.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="max-h-[45vh] overflow-y-auto rounded-lg border bg-muted/30 p-4">
+                  {viewing.review.comment ? (
+                    <p className="whitespace-pre-line break-words text-sm leading-7">{viewing.review.comment}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">بدون متن</p>
+                  )}
+                </div>
+
+                <div className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <span className="block text-xs text-muted-foreground">محصول</span>
+                    <span className="mt-0.5 block font-medium">{toFaDigits(viewing.productTitle)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground">مشتری</span>
+                    <span className="mt-0.5 block font-medium">{viewing.author}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground">ایمیل</span>
+                    <span className="mt-0.5 block text-muted-foreground">{viewing.email}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground">تاریخ</span>
+                    <span className="mt-0.5 block text-muted-foreground">
+                      {formatDateTime(viewing.review.createdAt)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground">امتیاز</span>
+                    <div className="mt-0.5">
+                      <RatingStars value={viewing.review.rating} />
+                    </div>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground">وضعیت</span>
+                    <span className="mt-0.5 block">
+                      <Badge variant={STATUS_VARIANT[viewing.review.status]}>
+                        {REVIEW_STATUS_LABELS[viewing.review.status]}
+                      </Badge>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1.5 text-success"
+                  disabled={busyId === viewing.review.id || viewing.review.status === "approved"}
+                  onClick={() => onModerate(viewing.review.id, "approved", () => setViewing(null))}
+                >
+                  <Check />
+                  تأیید
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1.5 text-destructive"
+                  disabled={busyId === viewing.review.id || viewing.review.status === "rejected"}
+                  onClick={() => onModerate(viewing.review.id, "rejected", () => setViewing(null))}
+                >
+                  <ThumbsDown />
+                  رد
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
