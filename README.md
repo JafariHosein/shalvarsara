@@ -590,6 +590,13 @@ cd frontend && cmd /c "npm run test:coverage"
 | `frontend` | `npm ci` + `tsc --noEmit` + `vitest run` + `vite build` |
 | `migrations` | بالا آوردن همهٔ مهاجرت‌ها روی PostgreSQL ۱۶، assert ستون/ایندکس‌ها، سپس `down all` و assert اینکه واقعاً برگشته‌اند |
 
+> ⚠ **این فایل هنوز در مخزن نیست.** گیت‌هاب افزودن فایل زیر `.github/workflows/`
+> را از توکنی که اسکوپ `workflow` ندارد رد می‌کند و توکن `gh` این مخزن فقط
+> `repo`/`gist`/`read:org` دارد. برای فعال‌کردن CI:
+> `gh auth refresh -s workflow` و بعد `git add .github && git commit -m "CI" && git push`؛
+> یا فایل را از خود گیت‌هاب بسازید (Actions → New workflow). تا آن موقع CI
+> اجرا نمی‌شود و چیز دیگری به آن وابسته نیست.
+
 > `go test -race` روی ویندوز بدون کامپایلر C اجرا نمی‌شود (`runtime/cgo: C compiler not found`). روی CI (اوبونتو) اجرا می‌شود.
 
 

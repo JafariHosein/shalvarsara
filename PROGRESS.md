@@ -173,11 +173,24 @@
   (typecheck + test + build) و `migrations` که مهاجرت‌ها را روی یک
   PostgreSQL 16 واقعی بالا و **پایین** می‌آورد و نبود/بودن ستون‌ها و ایندکس‌ها
   را assert می‌کند.
-- **اسکریپت‌های بررسی محلی** (همه در `scripts/`): `check-backend.cmd`،
-  `fmt-backend.cmd`، `check-frontend.cmd`، `check-frontend-full.cmd`،
+  > ⚠ **این فایل هنوز کامیت نشده است.** توکن `gh` این مخزن فقط
+  > `repo`/`gist`/`read:org` دارد و گیت‌هاب اجازهٔ افزودن فایل زیر
+  > `.github/workflows/` را بدون اسکوپ `workflow` نمی‌دهد:
+  > `refusing to allow an OAuth App to create or update workflow … without
+  > workflow scope`. برای فعال‌کردن CI یکی از این‌ها:
+  > `gh auth refresh -s workflow` و بعد کامیت و پوش؛ یا ساخت فایل از خود
+  > گیت‌هاب (Actions → New workflow)؛ یا استفاده از PAT با اسکوپ `workflow`.
+  > تا آن موقع CI اجرا نمی‌شود و چیز دیگری به آن وابسته نیست.
+- **اسکریپت‌های بررسی محلی** (همه در `scripts/`، بدون مسیر مطلق و قابل اجرا
+  پس از انتقال مخزن): `check-backend.cmd`، `fmt-backend.cmd`،
+  `check-frontend.cmd`، `check-frontend-full.cmd`، `db-verify.cmd`،
   `verify-fixes2.ps1` (API)، `verify-patch.ps1` (PATCH جزئی ادمین)،
-  `verify-rollback.cmd`، `verify-images.cmd`، `start-api2.cmd`،
-  `stop-api.cmd`، `gen-secrets.ps1`.
+  `verify-rollback.cmd`، `verify-images.cmd`، `gen-secrets.ps1`،
+  `start-api.cmd`، `stop-api.cmd` و `_pg-env.cmd` (پیدا کردن `psql` و
+  پارامترهای مشترک اتصال).
+  > اسکریپت‌های `verify-*.ps1` رمز ادمین را از `$env:ADMIN_PASSWORD`
+  > می‌خوانند و اگر ست نشده باشد با پیام روشن خارج می‌شوند — هیچ رمزی داخل
+  > مخزن نیست.
 
 > ⚠️ **`go test -race` روی این سیستم اجرا نمی‌شود** چون هیچ کامپایلر C نصب
 > نیست (`CGO_ENABLED=0` و `gcc`/`clang`/`cl` هیچ‌کدام نیستند). در CI (اوبونتو)

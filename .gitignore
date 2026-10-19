@@ -49,10 +49,11 @@ frontend/uploads/
 # from this checkout. Ignoring it keeps `git add -A` clean. It is safe to
 # remove by hand once the directory is re-created (or from an elevated shell).
 scripts/zz-*.cmd
-scripts/_acl*.cmd
-scripts/_proc*.cmd
-scripts/_gs.cmd
-scripts/_stage.cmd
-scripts/_checks.cmd
+scripts/_*.cmd
+scripts/_*.txt
 scripts/acl-report-*.jsonl
+
+# The one underscore helper that IS part of the project: the database scripts
+# `call` it to locate psql and share the connection parameters.
+!scripts/_pg-env.cmd
 
