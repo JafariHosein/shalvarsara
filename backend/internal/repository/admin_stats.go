@@ -18,14 +18,20 @@ func NewStatsRepository(db *database.Pool) *StatsRepository {
 	return &StatsRepository{db: db}
 }
 
+// paidStatuses is the revenue definition: an order counts once the money has
+// actually been taken. `pending` orders exist from the moment checkout writes
+// them and may never be paid, so counting them inflated revenue, the average
+// order value and every per-customer spend figure.
+const paidStatuses = `('paid', 'processing', 'shipped', 'delivered')`
+
 // Overview fills the dashboard counters and the trailing sales window.
 func (r *StatsRepository) Overview(ctx context.Context) (*model.AdminStats, error) {
 	var s model.AdminStats
 
 	if err := r.db.QueryRow(ctx, `
 		SELECT
-			COALESCE(SUM(total) FILTER (WHERE status <> 'canceled'), 0),
-			COUNT(*) FILTER (WHERE status <> 'canceled'),
+			COALESCE(SUM(total) FILTER (WHERE status IN `+paidStatuses+`), 0),
+			COUNT(*) FILTER (WHERE status IN `+paidStatuses+`),
 			COUNT(*) FILTER (WHERE status = 'pending'),
 			COUNT(*) FILTER (WHERE status IN ('paid', 'processing')),
 			COUNT(*) FILTER (WHERE status = 'shipped'),
@@ -54,12 +60,20 @@ func (r *StatsRepository) Overview(ctx context.Context) (*model.AdminStats, erro
 		return nil, err
 	}
 
+	// Day buckets are pinned to Tehran, not the database session timezone. The
+	// connection sets no `timezone`, so buckets computed with a bare
+	// `created_at::date` land in UTC and an order placed at 00:30 Tehran is
+	// reported on the previous day.
 	rows, err := r.db.Query(ctx, `
 		SELECT to_char(d.day, 'YYYY-MM-DD'),
-		       count(o.id),
-		       COALESCE(SUM(o.total) FILTER (WHERE o.status <> 'canceled'), 0)
-		FROM generate_series((now()::date - interval '13 days')::date, now()::date, interval '1 day') AS d(day)
-		LEFT JOIN orders o ON o.created_at::date = d.day
+		       count(o.id) FILTER (WHERE o.status IN `+paidStatuses+`),
+		       COALESCE(SUM(o.total) FILTER (WHERE o.status IN `+paidStatuses+`), 0)
+		FROM generate_series(
+		         (now() AT TIME ZONE 'Asia/Tehran')::date - interval '13 days',
+		         (now() AT TIME ZONE 'Asia/Tehran')::date,
+		         interval '1 day') AS d(day)
+		LEFT JOIN orders o
+		       ON (o.created_at AT TIME ZONE 'Asia/Tehran')::date = d.day
 		GROUP BY d.day
 		ORDER BY d.day`)
 	if err != nil {
@@ -84,15 +98,15 @@ func (r *StatsRepository) Overview(ctx context.Context) (*model.AdminStats, erro
 	return &s, nil
 }
 
-// TopSellers returns the products that sold the most units, cancelled orders
-// excluded.
+// TopSellers returns the products that sold the most units. Only money that was
+// actually taken is counted, so an abandoned checkout does not rank a product.
 func (r *StatsRepository) TopSellers(ctx context.Context, limit int) ([]model.BestSeller, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT oi.product_id, oi.title, COALESCE(p.slug, ''),
 		       SUM(oi.quantity)::bigint,
 		       SUM(oi.quantity * oi.unit_price)::bigint
 		FROM order_items oi
-		JOIN orders o ON o.id = oi.order_id AND o.status <> 'canceled'
+		JOIN orders o ON o.id = oi.order_id AND o.status IN `+paidStatuses+`
 		LEFT JOIN products p ON p.id = oi.product_id
 		GROUP BY oi.product_id, oi.title, p.slug
 		ORDER BY SUM(oi.quantity) DESC, SUM(oi.quantity * oi.unit_price) DESC

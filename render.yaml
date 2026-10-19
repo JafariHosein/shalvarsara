@@ -76,9 +76,12 @@ services:
         value: "مدیر فروشگاه"
       - key: ADMIN_EMAIL
         value: admin@example.com
-      # ⚠ رمز نمونه — پیش از اشتراک‌گذاری عمومی در پنل Render عوضش کن.
+      # ⚠ رمز مدیر را در پنل Render (Environment → Secret Files / Env Vars) وارد
+      # کن؛ اینجا هیچ مقدار پیش‌فرضی نیست. اگر خالی بماند، API در production
+      # بالا می‌آید اما حساب مدیری ساخته نمی‌شود (seeder هشدار می‌دهد) تا رمز
+      # نمونه‌ای داخل مخزن عمومی نشت نکند.
       - key: ADMIN_PASSWORD
-        value: Admin@12345
+        sync: false
       - key: ZARINPAL_SANDBOX
         value: "true"
       - key: ZARINPAL_MERCHANT_ID

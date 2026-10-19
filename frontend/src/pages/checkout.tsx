@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -32,7 +32,7 @@ import { useOrderPreview } from "@/hooks/use-orders";
 import { ApiError, errorMessage } from "@/lib/api";
 import { CART_QUERY_KEY } from "@/lib/cart-cache";
 import { formatNumber, formatToman, toEnDigits, toFaDigits } from "@/lib/format";
-import { LAST_PAYMENT_KEY, type StoredPaymentStart } from "@/lib/payment-session";
+import { writeLastPayment } from "@/lib/payment-session";
 import { addressService } from "@/services/addresses";
 import { orderService } from "@/services/orders";
 import { paymentService } from "@/services/payments";
@@ -149,11 +149,14 @@ function PreviewLine({ item }: { item: OrderPreviewItem }) {
  */
 export function CheckoutPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [couponInput, setCouponInput] = React.useState("");
   const [coupon, setCoupon] = React.useState("");
   const [addressId, setAddressId] = React.useState<number | null>(null);
   const [note, setNote] = React.useState("");
+  /** Set the moment `POST /orders` succeeds — see `pay.onError`. */
+  const createdOrderId = React.useRef<number | null>(null);
 
   const addresses = useQuery({
     queryKey: ["addresses"],
@@ -177,7 +180,10 @@ export function CheckoutPage() {
       toast.success("کد تخفیف اعمال شد.");
     },
     onError: (error) => {
-      setCoupon("");
+      // Do not clear `coupon` here: it holds the code that is *currently*
+      // applied, which may still be perfectly valid. A rejected attempt only
+      // means the new code is bad — dropping the old one would silently raise
+      // the total the customer is about to authorise.
       toast.error(errorMessage(error));
     },
   });
@@ -189,31 +195,34 @@ export function CheckoutPage() {
         couponCode: coupon || undefined,
         note: note.trim() || undefined,
       });
+      // Remember the id as soon as the order exists: creating it already
+      // cleared the cart, so if opening the gateway then fails the customer
+      // must not be left on an "empty cart" checkout with no way back.
+      createdOrderId.current = order.id;
       const start = await paymentService.start(order.id);
       return { order, start };
     },
     onSuccess: ({ start }) => {
       // Hand the order back to the cart badge before leaving the SPA, and keep
       // the session details so the result page can show the amount and the
-      // sandbox badge even before its own request finishes.
+      // sandbox badge even before its own request finishes. writeLastPayment is
+      // guarded, so a storage failure cannot stop the redirect below.
       void queryClient.invalidateQueries({ queryKey: CART_QUERY_KEY });
-      const stored: StoredPaymentStart = {
-        paymentId: start.paymentId,
-        orderId: start.orderId,
-        orderCode: start.orderCode,
-        authority: start.authority,
-        amountRial: start.amountRial,
-        sandbox: start.sandbox,
-      };
-      sessionStorage.setItem(LAST_PAYMENT_KEY, JSON.stringify(stored));
+      writeLastPayment(start);
       window.location.assign(start.gatewayUrl);
     },
     onError: async (error) => {
-      // The order may have been rejected because the cart changed under us.
-      if (error instanceof ApiError && error.code === "out_of_stock") {
-        await queryClient.invalidateQueries({ queryKey: CART_QUERY_KEY });
-        await preview.refetch();
+      await queryClient.invalidateQueries({ queryKey: CART_QUERY_KEY });
+      // The order exists but the gateway session does not: the cart is gone, so
+      // send the customer to their orders, where the unpaid order offers a
+      // "pay" button that opens a fresh gateway session.
+      if (createdOrderId.current !== null) {
+        toast.error("سفارش ثبت شد اما اتصال به درگاه پرداخت برقرار نشد. از بخش سفارش‌ها پرداخت را ادامه دهید.");
+        navigate("/account/orders", { replace: true });
+        return;
       }
+      // Otherwise the order was rejected because the cart moved under us.
+      await preview.refetch();
       toast.error(errorMessage(error));
     },
   });
@@ -456,8 +465,8 @@ export function CheckoutPage() {
                 پرداخت از طریق درگاه امن زرین‌پال انجام می‌شود و موجودی کالا در همان لحظه برای شما رزرو می‌گردد.
               </p>
 
-              <Button asChild variant="ghost" className="w-full" disabled={paying}>
-                <Link to="/cart">بازگشت به سبد خرید</Link>
+              <Button variant="ghost" className="w-full" asChild={!paying} disabled={paying}>
+                {paying ? <>بازگشت به سبد خرید</> : <Link to="/cart">بازگشت به سبد خرید</Link>}
               </Button>
             </CardContent>
           </Card>

@@ -16,8 +16,8 @@ export interface CreateOrderPayload {
  * customer is shown is what they are charged.
  */
 export const orderService = {
-  preview: (couponCode?: string) =>
-    http.post<OrderPreview>("/orders/preview", { couponCode: couponCode ?? "" }, { auth: true }),
+  preview: (couponCode?: string, signal?: AbortSignal) =>
+    http.post<OrderPreview>("/orders/preview", { couponCode: couponCode ?? "" }, { auth: true, signal }),
 
   create: (payload: CreateOrderPayload) => http.post<Order>("/orders", payload, { auth: true }),
 

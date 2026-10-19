@@ -33,14 +33,14 @@ func (r *ReviewRepository) AdminList(
 
 	const where = `
 		WHERE ($1 = '' OR rev.status::text = $1)
-		  AND ($2 = '' OR p.title ILIKE '%' || $2 || '%'
-		               OR u.name ILIKE '%' || $2 || '%'
-		               OR u.email ILIKE '%' || $2 || '%')`
+		  AND ($2 = '' OR p.title ILIKE $2 ESCAPE '\'
+		               OR u.name ILIKE $2 ESCAPE '\'
+		               OR u.email ILIKE $2 ESCAPE '\')`
 
 	var total int64
 	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM reviews rev
 		JOIN products p ON p.id = rev.product_id
-		JOIN users u ON u.id = rev.user_id`+where, f.Status, f.Query).Scan(&total); err != nil {
+		JOIN users u ON u.id = rev.user_id`+where, f.Status, reviewSearchPattern(f.Query)).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -49,7 +49,7 @@ func (r *ReviewRepository) AdminList(
 
 	rows, err := r.db.Query(ctx, adminReviewSelect+where+`
 		ORDER BY rev.created_at DESC, rev.id DESC
-		LIMIT $3 OFFSET $4`, f.Status, f.Query, f.Limit, f.Offset())
+		LIMIT $3 OFFSET $4`, f.Status, reviewSearchPattern(f.Query), f.Limit, f.Offset())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -70,10 +70,39 @@ func (r *ReviewRepository) AdminList(
 	return out, total, rows.Err()
 }
 
-// AdminSetStatus records the moderation decision and returns the updated row so
-// the caller knows which product's rating to refresh.
+// reviewSearchPattern turns an empty box into "no filter" (the empty string is
+// what the $2 = ” guard tests) and anything else into an escaped pattern.
+func reviewSearchPattern(q string) string {
+	if strings.TrimSpace(q) == "" {
+		return ""
+	}
+	return likePattern(q)
+}
+
+// AdminSetStatus records the moderation decision and refreshes the product's
+// public rating in the same transaction.
+//
+// The two statements used to commit separately, so a failure in the second left
+// the review moderated but the product's stars stale — and two admins approving
+// different reviews of one product could interleave them.
 func (r *ReviewRepository) AdminSetStatus(ctx context.Context, id int64, status string) (*model.Review, error) {
-	return scanReview(r.db.QueryRow(ctx,
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	review, err := scanReview(tx.QueryRow(ctx,
 		`UPDATE reviews SET status = $2::review_status WHERE id = $1 RETURNING `+reviewColumns,
 		id, status))
+	if err != nil {
+		return nil, err
+	}
+	if err := recalcProductRatingTx(ctx, tx, review.ProductID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return review, nil
 }

@@ -23,12 +23,15 @@ func NewOrderRepository(db *database.Pool) *OrderRepository {
 
 const orderColumns = `
 	o.id, o.code, o.user_id, o.status::text, o.subtotal, o.discount, o.shipping_cost, o.total,
-	COALESCE(c.code, ''), o.note,
+	COALESCE(NULLIF(o.coupon_code, ''), c.code, ''), o.note,
 	o.ship_receiver_name, o.ship_phone, o.ship_province, o.ship_city, o.ship_postal_code, o.ship_line1,
 	o.paid_at, o.created_at, o.updated_at`
 
-// coupon_id is resolved to its code so the UI can show which code was used even
-// after the coupon row itself is deactivated.
+// The coupon code is stored on the order itself. Reading it back from the
+// coupons table would let a later edit rewrite the code shown on old invoices,
+// and deleting the coupon would erase it entirely — the same reason titles and
+// prices are snapshotted. The join stays as a fallback for rows written before
+// the snapshot column existed.
 const orderSelect = `
 	SELECT ` + orderColumns + `
 	FROM orders o
@@ -77,16 +80,16 @@ func (r *OrderRepository) CreateFromCart(ctx context.Context, draft *model.Order
 	err = tx.QueryRow(ctx, `
 		INSERT INTO orders (
 			code, user_id, address_id, status, subtotal, discount, shipping_cost, total,
-			coupon_id, note,
+			coupon_id, coupon_code, note,
 			ship_receiver_name, ship_phone, ship_province, ship_city, ship_postal_code, ship_line1
 		) VALUES (
 			$1 || lpad(nextval('order_code_seq')::text, 6, '0'), $2, $3, 'pending', $4, $5, $6, $7,
-			$8, $9, $10, $11, $12, $13, $14, $15
+			$8, $9, $10, $11, $12, $13, $14, $15, $16
 		)
 		RETURNING id, code, created_at, updated_at`,
 		draft.CodePrefix, draft.UserID, draft.AddressID,
 		draft.Subtotal, draft.Discount, draft.ShippingCost, draft.Total,
-		draft.CouponID, draft.Note,
+		draft.CouponID, draft.CouponCode, draft.Note,
 		draft.ShippingAddress.ReceiverName, draft.ShippingAddress.Phone,
 		draft.ShippingAddress.Province, draft.ShippingAddress.City,
 		draft.ShippingAddress.PostalCode, draft.ShippingAddress.Line1,
@@ -145,9 +148,20 @@ func (r *OrderRepository) CreateFromCart(ctx context.Context, draft *model.Order
 
 	// The basket became an order; the cart is only emptied once everything else
 	// has succeeded.
+	//
+	// The deleted-row count is the checkout's idempotency guard: two overlapping
+	// POST /orders (a double-click, or a client retry) both price the same cart
+	// before either transaction commits. The loser blocks on the rows the winner
+	// deleted, re-reads and finds nothing left to consume, so it rolls back —
+	// releasing the stock and the coupon use it had reserved — instead of
+	// producing a second order for one basket.
 	if draft.CartID != nil {
-		if _, err := tx.Exec(ctx, `DELETE FROM cart_items WHERE cart_id = $1`, *draft.CartID); err != nil {
+		tag, err := tx.Exec(ctx, `DELETE FROM cart_items WHERE cart_id = $1`, *draft.CartID)
+		if err != nil {
 			return nil, err
+		}
+		if tag.RowsAffected() == 0 {
+			return nil, model.ErrEmptyCart
 		}
 	}
 

@@ -80,10 +80,16 @@ export function AdminProductForm() {
 
   const { reset } = form;
 
+  // Id of the product the form was last filled from. Variant and image edits
+  // refetch the product, and reseeding the form on every refetch would silently
+  // throw away whatever the admin had typed but not saved yet.
+  const seededId = React.useRef<number | null>(null);
+
   // Fill the form once the product arrives; a create screen keeps its defaults.
   React.useEffect(() => {
     const product = existing.data;
-    if (!product) return;
+    if (!product || seededId.current === product.id) return;
+    seededId.current = product.id;
     reset({
       title: product.title,
       slug: product.slug,

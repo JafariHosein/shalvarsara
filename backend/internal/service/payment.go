@@ -61,6 +61,24 @@ func (s *PaymentService) Start(ctx context.Context, userID, orderID int64) (*mod
 
 	amountRial := order.Total * rialPerToman
 
+	// Reuse an attempt that is still open instead of minting another authority
+	// on every click. Each authority is an independent chance to take the money,
+	// so a customer who reloads the pay button ten times would otherwise end up
+	// with ten live gateway sessions for one order.
+	if existing, err := s.payments.LatestOpen(ctx, order.ID); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return &model.PaymentStart{
+			PaymentID:  existing.ID,
+			OrderID:    order.ID,
+			OrderCode:  order.Code,
+			Authority:  existing.Authority,
+			GatewayURL: s.gateway.StartPayURL(existing.Authority),
+			AmountRial: existing.Amount,
+			Sandbox:    s.cfg.Sandbox,
+		}, nil
+	}
+
 	// The attempt is recorded before the gateway is called, so a crash between
 	// the two still leaves a trail to reconcile from.
 	payment, err := s.payments.Create(ctx, order.ID, amountRial)
@@ -163,6 +181,17 @@ func (s *PaymentService) Callback(ctx context.Context, authority, status string)
 	}
 
 	if err := s.payments.Complete(ctx, payment.ID, order.ID, verified.RefID, verified.CardPan); err != nil {
+		// The gateway took the money but the order was no longer payable: either
+		// a second authority for an order that is already paid, or an order the
+		// shop cancelled (whose stock has already gone back to the pool).
+		// Complete rolled back, so the attempt stays visible as initiated for
+		// reconciliation instead of being recorded as a successful payment.
+		if errors.Is(err, model.ErrConflict) {
+			text := "این سفارش دیگر قابل پرداخت نیست؛ اگر مبلغی کسر شده باشد، حداکثر تا ۷۲ ساعت بازگردانده می‌شود."
+			_ = s.payments.Fail(ctx, payment.ID, text)
+			outcome.Message = text
+			return outcome, nil
+		}
 		return nil, err
 	}
 	outcome.Paid = true

@@ -19,6 +19,11 @@ type User struct {
 	PasswordHash string `json:"-"`
 	Role         Role   `json:"role"`
 	IsActive     bool   `json:"isActive"`
+	// TokenVersion is the counter embedded in every issued token. Bumping it
+	// invalidates all tokens minted before the bump — that is how log-out, a
+	// password change and an admin deactivation take effect immediately even
+	// though the tokens themselves are stateless.
+	TokenVersion int32 `json:"-"`
 	// PhoneVerifiedAt is set when the number was proven with an SMS code at
 	// sign-up; a number typed in later through the profile is not verified.
 	PhoneVerifiedAt *time.Time `json:"phoneVerifiedAt,omitempty"`

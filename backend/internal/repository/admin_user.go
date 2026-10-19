@@ -19,9 +19,11 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f model.AdminUserFilt
 	args := []any{}
 
 	if q := strings.TrimSpace(f.Query); q != "" {
-		args = append(args, "%"+q+"%")
+		args = append(args, likePattern(q))
 		ph := "$" + itoa(len(args))
-		conds = append(conds, "(u.name ILIKE "+ph+" OR u.email ILIKE "+ph+" OR u.phone ILIKE "+ph+")")
+		conds = append(conds, "(u.name ILIKE "+ph+` ESCAPE '\'`+
+			" OR u.email ILIKE "+ph+` ESCAPE '\'`+
+			" OR u.phone ILIKE "+ph+` ESCAPE '\'`+")")
 	}
 	if role := strings.TrimSpace(f.Role); role != "" && role != "all" {
 		args = append(args, role)
@@ -45,7 +47,7 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f model.AdminUserFilt
 		FROM users u
 		LEFT JOIN (
 			SELECT user_id, count(*) AS order_count,
-			       COALESCE(SUM(total) FILTER (WHERE status <> 'canceled'), 0) AS total_spent,
+			       COALESCE(SUM(total) FILTER (WHERE status IN ('paid', 'processing', 'shipped', 'delivered')), 0) AS total_spent,
 			       max(created_at) AS last_order_at
 			FROM orders GROUP BY user_id
 		) agg ON agg.user_id = u.id
@@ -79,13 +81,22 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f model.AdminUserFilt
 }
 
 // UpdateAccess applies an admin's changes to a user's role and activity.
+//
+// A role change or a deactivation bumps token_version in the same statement:
+// otherwise the demoted or disabled account would keep using its existing admin
+// token until it expired.
 func (r *UserRepository) UpdateAccess(ctx context.Context, id int64, in model.AdminUserInput) (*model.User, error) {
 	const q = `
 		UPDATE users SET
 			role = COALESCE($2::user_role, role),
 			is_active = COALESCE($3, is_active),
 			name = COALESCE($4, name),
-			phone = COALESCE($5, phone)
+			phone = COALESCE($5, phone),
+			token_version = token_version + CASE
+				WHEN ($2::user_role IS NOT NULL AND $2::user_role <> role) THEN 1
+				WHEN ($3 IS NOT NULL AND $3 <> is_active) THEN 1
+				ELSE 0
+			END
 		WHERE id = $1
 		RETURNING ` + userColumns
 

@@ -57,6 +57,25 @@ func (r *PaymentRepository) GetByAuthority(ctx context.Context, authority string
 		`SELECT `+paymentColumns+` FROM payments WHERE authority = $1`, authority))
 }
 
+// LatestOpen returns the newest attempt for an order that already has an
+// authority and has not been settled or rejected, or nil when there is none.
+//
+// Paying is started from the storefront, so a customer who reloads and clicks
+// again would otherwise mint a second live gateway session for the same order.
+func (r *PaymentRepository) LatestOpen(ctx context.Context, orderID int64) (*model.Payment, error) {
+	p, err := scanPayment(r.db.QueryRow(ctx, `
+		SELECT `+paymentColumns+` FROM payments
+		WHERE order_id = $1 AND status = 'initiated' AND authority IS NOT NULL
+		ORDER BY id DESC LIMIT 1`, orderID))
+	if errors.Is(err, model.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 // Fail records a declined or abandoned attempt.
 func (r *PaymentRepository) Fail(ctx context.Context, id int64, message string) error {
 	_, err := r.db.Exec(ctx,
@@ -65,9 +84,21 @@ func (r *PaymentRepository) Fail(ctx context.Context, id int64, message string) 
 }
 
 // Complete marks the payment verified and the order paid in one transaction, so
-// the two can never disagree. It is safe to call once per authority: the caller
-// checks the payment status first and this method is a no-op on an order that is
-// already paid.
+// the two can never disagree.
+//
+// The order UPDATE is guarded on `status = 'pending'`, which is what makes the
+// whole flow safe against the two ways money could otherwise be taken twice:
+//
+//   - a second authority for an order that was already paid (Start can mint as
+//     many as the customer asks for) would otherwise settle again, charging the
+//     customer twice with nothing flagging it;
+//   - an order the shop already cancelled has had its stock returned by
+//     restoreStock, so flipping it back to 'paid' would silently oversell.
+//
+// When the guard matches no row the transaction rolls back untouched and the
+// caller is told the order was no longer payable. The payment row is deliberately
+// left as-is rather than marked verified: the money did move, so the attempt must
+// stay visible for reconciliation instead of being recorded as a success.
 func (r *PaymentRepository) Complete(
 	ctx context.Context, paymentID, orderID int64, refID, cardPan string,
 ) error {
@@ -77,17 +108,21 @@ func (r *PaymentRepository) Complete(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, `
-		UPDATE payments
-		SET status = 'verified', ref_id = $2, card_pan = $3, message = ''
-		WHERE id = $1`, paymentID, refID, cardPan); err != nil {
+	tag, err := tx.Exec(ctx, `
+		UPDATE orders
+		SET status = 'paid', paid_at = COALESCE(paid_at, now())
+		WHERE id = $1 AND status = 'pending'`, orderID)
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrConflict
 	}
 
 	if _, err := tx.Exec(ctx, `
-		UPDATE orders
-		SET status = 'paid', paid_at = COALESCE(paid_at, now())
-		WHERE id = $1`, orderID); err != nil {
+		UPDATE payments
+		SET status = 'verified', ref_id = $2, card_pan = $3, message = ''
+		WHERE id = $1 AND status <> 'verified'`, paymentID, refID, cardPan); err != nil {
 		return err
 	}
 

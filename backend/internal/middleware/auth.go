@@ -47,6 +47,11 @@ func (a *Auth) RequireAuth(c *fiber.Ctx) error {
 	if !user.IsActive {
 		return httpx.Fail(c, model.ErrForbidden)
 	}
+	// A token minted before the last logout, password change or deactivation
+	// carries an older version and is no longer honoured.
+	if claims.Version != user.TokenVersion {
+		return httpx.Fail(c, model.ErrUnauthorized)
+	}
 
 	c.Locals(localUserKey, user)
 	return c.Next()

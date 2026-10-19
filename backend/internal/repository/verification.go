@@ -12,9 +12,17 @@ import (
 	"github.com/shalvarsara/backend/internal/model"
 )
 
-// maxCodeAttempts is how many wrong guesses one code tolerates before it is
-// burned. Six digits with five tries keeps guessing hopeless.
+// maxCodeAttempts is how many wrong guesses one phone number tolerates before
+// it is locked out. Six digits with five tries keeps guessing hopeless.
+//
+// The budget is per (phone, purpose) across a rolling window, not per code row:
+// counting only the newest row meant every re-issue restored a fresh five
+// guesses, so an attacker could grind indefinitely at the price of an SMS per
+// round.
 const maxCodeAttempts = 5
+
+// attemptWindow is how far back failures are counted.
+const attemptWindow = time.Hour
 
 // PhoneVerificationRepository stores the one-time codes sent to a phone number.
 type PhoneVerificationRepository struct {
@@ -78,7 +86,7 @@ func (r *PhoneVerificationRepository) LastIssuedAt(
 // Verify checks the newest open code for this phone and burns it on success.
 // Every failure mode has its own sentinel so the service can explain itself:
 // ErrNotFound when nothing was ever sent, ErrInvalidCode for a wrong or expired
-// guess.
+// guess, ErrTooManyRequests once the per-number guess budget is spent.
 //
 // The row is locked for the check, so two simultaneous submissions cannot both
 // pass with the same code.
@@ -88,6 +96,26 @@ func (r *PhoneVerificationRepository) Verify(ctx context.Context, phone, purpose
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Lock the phone's whole verification history for this purpose, so the
+	// guess budget cannot be raced by firing attempts in parallel.
+	if _, err := tx.Exec(ctx, `
+		SELECT id FROM phone_verifications
+		WHERE phone = $1 AND purpose = $2
+		FOR UPDATE`, phone, purpose); err != nil {
+		return err
+	}
+
+	var failures int
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(attempts), 0) FROM phone_verifications
+		WHERE phone = $1 AND purpose = $2 AND created_at > now() - make_interval(secs => $3)`,
+		phone, purpose, int(attemptWindow.Seconds())).Scan(&failures); err != nil {
+		return err
+	}
+	if failures >= maxCodeAttempts {
+		return model.ErrTooManyRequests
+	}
 
 	const pick = `
 		SELECT id, code, attempts, expires_at, consumed_at
@@ -115,7 +143,7 @@ func (r *PhoneVerificationRepository) Verify(ctx context.Context, phone, purpose
 	// A code that was already used, ran out of tries or timed out is simply a
 	// wrong code from the customer's point of view — asking for a fresh one is
 	// the next step either way.
-	if consumedAt != nil || attempts >= maxCodeAttempts || !time.Now().Before(expiresAt) {
+	if consumedAt != nil || !time.Now().Before(expiresAt) {
 		return model.ErrInvalidCode
 	}
 

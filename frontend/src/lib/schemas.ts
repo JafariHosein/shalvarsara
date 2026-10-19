@@ -78,13 +78,39 @@ export function digitsToNumber(value: string): number {
   return digits === "" ? 0 : Number(digits);
 }
 
+/**
+ * True when the input is digits only (Latin, Persian or Arabic-Indic), allowing
+ * thousands separators, spaces and a leading currency word but no other
+ * characters.
+ *
+ * `digitsToNumber` strips everything that is not a digit, so "abc" would become
+ * 0 and silently pass a `>= 0` check — clearing a discount or zeroing a stock
+ * count without telling anyone. Validation therefore has to reject the text
+ * *before* it is coerced.
+ */
+export function isDigitsOnly(value: string): boolean {
+  const normalised = toEnDigits(value)
+    .replace(/[,\u066c\u060c\s\u200c]/g, "")
+    .replace(/^تومان/, "");
+  return /^\d+$/.test(normalised);
+}
+
 /** A positive integer as text, e.g. "۲۵۰۰۰۰" for a price. */
 const moneyField = (message: string, min = 0) =>
   z
     .string()
     .trim()
     .min(1, message)
+    .refine(isDigitsOnly, message)
     .refine((value) => digitsToNumber(value) >= min, message);
+
+/** An optional non-negative integer as text; "" means "not set". */
+const optionalCountField = (message: string) =>
+  z
+    .string()
+    .trim()
+    .refine((value) => value === "" || isDigitsOnly(value), message)
+    .refine((value) => value === "" || digitsToNumber(value) >= 0, message);
 
 export const productSchema = z
   .object({
@@ -104,14 +130,8 @@ export const productSchema = z
     shortDesc: z.string().trim().max(600, "توضیح کوتاه بیش از حد بلند است."),
     description: z.string().trim().max(6000, "توضیحات بیش از حد بلند است."),
     price: moneyField("قیمت را وارد کنید.", 1),
-    discountPrice: z
-      .string()
-      .trim()
-      .refine((value) => value === "" || digitsToNumber(value) >= 0, "قیمت با تخفیف معتبر نیست."),
-    stock: z
-      .string()
-      .trim()
-      .refine((value) => value === "" || digitsToNumber(value) >= 0, "موجودی معتبر نیست."),
+    discountPrice: optionalCountField("قیمت با تخفیف معتبر نیست."),
+    stock: optionalCountField("موجودی معتبر نیست."),
     sku: z.string().trim().max(64, "کد کالا بیش از حد بلند است."),
     isActive: z.boolean(),
     isFeatured: z.boolean(),
@@ -132,33 +152,44 @@ export const variantSchema = z.object({
   colorHex: z
     .string()
     .trim()
-    .refine((value) => value === "" || /^#?[0-9a-fA-F]{3,8}$/.test(value), "کد رنگ معتبر نیست."),
-  stock: z
-    .string()
-    .trim()
-    .refine((value) => value === "" || digitsToNumber(value) >= 0, "موجودی معتبر نیست."),
+    .refine(
+      // Only 3-, 6- and 8-digit hex are real CSS colours; an 8-digit value with
+      // the alpha channel is allowed because the backend accepts #RRGGBBAA.
+      (value) => value === "" || /^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value),
+      "کد رنگ معتبر نیست (مثل #2563EB).",
+    ),
+  stock: optionalCountField("موجودی معتبر نیست."),
   sku: z.string().trim().max(64, "کد کالا بیش از حد بلند است."),
-  extraPrice: z
-    .string()
-    .trim()
-    .refine((value) => value === "" || digitsToNumber(value) >= 0, "اختلاف قیمت معتبر نیست."),
+  extraPrice: optionalCountField("اختلاف قیمت معتبر نیست."),
 });
 
 export type VariantFormValues = z.infer<typeof variantSchema>;
 
+/**
+ * A gallery image address.
+ *
+ * Absolute http(s) URLs are accepted, and so are app-relative paths: the seeded
+ * catalogue and the frontend's own public directory both store values like
+ * "/products/jeans-navy-a-1.webp". A plain `.url()` check rejects those, which
+ * made every seeded image impossible to edit (alt text, order, primary flag).
+ */
+export const imageUrlSchema = z
+  .string()
+  .trim()
+  .min(1, "نشانی تصویر را وارد کنید.")
+  .max(500, "نشانی تصویر بیش از حد بلند است.")
+  .refine(
+    (value) =>
+      // A protocol-relative path would resolve to another host; reject it.
+      /^\/(?!\/)/.test(value) || /^https?:\/\/[^\s]+$/i.test(value),
+    "نشانی تصویر باید با http:// یا https:// شروع شود یا یک مسیر داخلی مانند /products/… باشد.",
+  );
+
 export const imageSchema = z.object({
-  url: z
-    .string()
-    .trim()
-    .min(1, "نشانی تصویر را وارد کنید.")
-    .url("نشانی تصویر معتبر نیست (با http یا https شروع شود).")
-    .max(500, "نشانی تصویر بیش از حد بلند است."),
+  url: imageUrlSchema,
   alt: z.string().trim().max(300, "متن جایگزین بیش از حد بلند است."),
   isPrimary: z.boolean(),
-  sortOrder: z
-    .string()
-    .trim()
-    .refine((value) => value === "" || digitsToNumber(value) >= 0, "ترتیب نمایش معتبر نیست."),
+  sortOrder: optionalCountField("ترتیب نمایش معتبر نیست."),
 });
 
 export type ImageFormValues = z.infer<typeof imageSchema>;

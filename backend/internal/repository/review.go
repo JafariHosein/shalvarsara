@@ -132,16 +132,27 @@ func (r *ReviewRepository) Upsert(
 // RecalcProductRating rewrites the product's public rating from the reviews
 // that are actually approved, so the stars on the card always match the list.
 func (r *ReviewRepository) RecalcProductRating(ctx context.Context, productID int64) error {
-	_, err := r.db.Exec(ctx, `
-		UPDATE products SET
-			rating_avg = COALESCE(ROUND((
-				SELECT avg(rating) FROM reviews
-				WHERE product_id = $1 AND status = 'approved'
-			), 2), 0),
-			rating_count = (
-				SELECT count(*) FROM reviews
-				WHERE product_id = $1 AND status = 'approved'
-			)
-		WHERE id = $1`, productID)
+	_, err := r.db.Exec(ctx, recalcProductRatingSQL, productID)
+	return err
+}
+
+// recalcProductRatingSQL is shared by the pooled and the in-transaction forms so
+// the two can never drift apart.
+const recalcProductRatingSQL = `
+	UPDATE products SET
+		rating_avg = COALESCE(ROUND((
+			SELECT avg(rating) FROM reviews
+			WHERE product_id = $1 AND status = 'approved'
+		), 2), 0),
+		rating_count = (
+			SELECT count(*) FROM reviews
+			WHERE product_id = $1 AND status = 'approved'
+		)
+	WHERE id = $1`
+
+// recalcProductRatingTx is the same recomputation inside a caller's transaction,
+// so a moderation decision and the rating it implies commit together.
+func recalcProductRatingTx(ctx context.Context, tx pgx.Tx, productID int64) error {
+	_, err := tx.Exec(ctx, recalcProductRatingSQL, productID)
 	return err
 }

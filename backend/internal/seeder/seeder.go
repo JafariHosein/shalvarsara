@@ -24,10 +24,10 @@ import (
 )
 
 // Seed runs the full seed. It is safe to call on every boot.
-func Seed(ctx context.Context, db *database.Pool, admin config.AdminConfig) error {
+func Seed(ctx context.Context, db *database.Pool, admin config.AdminConfig, appEnv string) error {
 	rng := rand.New(rand.NewSource(1403)) // fixed seed => reproducible catalogue
 
-	if err := seedUsers(ctx, db, admin); err != nil {
+	if err := seedUsers(ctx, db, admin, appEnv); err != nil {
 		return fmt.Errorf("seed users: %w", err)
 	}
 
@@ -68,10 +68,18 @@ func Seed(ctx context.Context, db *database.Pool, admin config.AdminConfig) erro
 
 // ---------------------------------------------------------------- users ----
 
-func seedUsers(ctx context.Context, db *database.Pool, admin config.AdminConfig) error {
-	adminPassword := admin.Password
-	if strings.TrimSpace(adminPassword) == "" {
-		adminPassword = "Admin@12345"
+func seedUsers(ctx context.Context, db *database.Pool, admin config.AdminConfig, appEnv string) error {
+	adminPassword := strings.TrimSpace(admin.Password)
+	if adminPassword == "" {
+		// There is deliberately no fallback password any more. A default baked
+		// into the source is a published credential, and the upsert below would
+		// re-assert the admin role on every boot — so a missing value used to
+		// leave a live admin account protected by a password anyone can read in
+		// the repository. In production the process refuses to start instead.
+		if strings.EqualFold(appEnv, "production") {
+			return fmt.Errorf("seedUsers: ADMIN_PASSWORD is required when SEED_ON_START is on in production")
+		}
+		log.Warn().Msg("ADMIN_PASSWORD is empty; skipping the admin account (set it to create one)")
 	}
 
 	accounts := []struct {
@@ -81,8 +89,16 @@ func seedUsers(ctx context.Context, db *database.Pool, admin config.AdminConfig)
 		password string
 		role     model.Role
 	}{
-		{admin.Name, strings.ToLower(admin.Email), "09120000000", adminPassword, model.RoleAdmin},
 		{"کاربر نمونه", "customer@example.com", "09121111111", "Customer@12345", model.RoleCustomer},
+	}
+	if adminPassword != "" {
+		accounts = append([]struct {
+			name     string
+			email    string
+			phone    string
+			password string
+			role     model.Role
+		}{{admin.Name, strings.ToLower(admin.Email), "09120000000", adminPassword, model.RoleAdmin}}, accounts...)
 	}
 
 	for _, a := range accounts {
@@ -90,7 +106,9 @@ func seedUsers(ctx context.Context, db *database.Pool, admin config.AdminConfig)
 		if err != nil {
 			return err
 		}
-		// Upsert by email so re-running does not fail on the unique index.
+		// Upsert by email so re-running does not fail on the unique index. The
+		// existing hash is kept, so a later boot never resets a password the
+		// operator changed in the meantime.
 		_, err = db.Exec(ctx, `
 			INSERT INTO users (name, email, phone, password_hash, role)
 			VALUES ($1, $2, $3, $4, $5)

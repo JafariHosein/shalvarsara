@@ -6,6 +6,14 @@ import type { ServerCart } from "@/types/api";
 /** React Query key for the signed-in user's cart. */
 export const CART_QUERY_KEY = ["cart"] as const;
 
+/**
+ * Ceiling the merge endpoint accepts per line. The guest cart is only clamped by
+ * stock, which can be far higher than this, so a line above it would make the
+ * whole merge fail validation — and because the failure is silent, the guest
+ * basket would simply never transfer.
+ */
+export const MAX_MERGE_QUANTITY = 99;
+
 /** Replace the cached cart with a response the server just sent. */
 export function setCachedCart(cart: ServerCart): void {
   queryClient.setQueryData(CART_QUERY_KEY, cart);
@@ -28,7 +36,7 @@ export function getCachedCart(): ServerCart | undefined {
  * merge can be retried on the next sign-in.
  *
  * @returns how many guest lines the server had to drop (delisted or out of
- *   stock), or 0 when there was nothing to merge or the call failed.
+ *   stock), or -1 when the merge itself failed.
  */
 export function syncGuestCart(): Promise<number> {
   // One merge at a time: React StrictMode runs mount effects twice, and two
@@ -52,7 +60,9 @@ async function runMerge(): Promise<number> {
       lines.map((line) => ({
         productId: line.productId,
         variantId: line.variantId,
-        quantity: line.quantity,
+        // The endpoint rejects anything above 99, and one out-of-range line
+        // fails the whole request.
+        quantity: Math.min(Math.max(1, line.quantity), MAX_MERGE_QUANTITY),
       })),
     );
 
@@ -60,7 +70,8 @@ async function runMerge(): Promise<number> {
     clear();
     return result.skipped;
   } catch {
-    // Keep the guest cart so the next sign-in can try again.
-    return 0;
+    // Keep the guest cart so the next sign-in can try again. -1 (rather than 0)
+    // so callers can tell "nothing was dropped" from "nothing was merged".
+    return -1;
   }
 }

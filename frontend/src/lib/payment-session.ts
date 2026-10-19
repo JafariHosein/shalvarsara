@@ -26,3 +26,20 @@ export function readLastPayment(): StoredPaymentStart | null {
     return null;
   }
 }
+
+/**
+ * Record the session before the browser leaves for the gateway.
+ *
+ * Guarded on purpose: callers write this immediately before
+ * `window.location.assign(gatewayUrl)`, so a throw here (storage disabled, or
+ * the quota is full) would abort the redirect and surface as a failed payment —
+ * even though the order exists and the gateway session is already open.
+ */
+export function writeLastPayment(start: PaymentStart): void {
+  try {
+    const { gatewayUrl: _gatewayUrl, ...rest } = start;
+    sessionStorage.setItem(LAST_PAYMENT_KEY, JSON.stringify(rest));
+  } catch {
+    /* the cache is a convenience; never let it block the redirect */
+  }
+}

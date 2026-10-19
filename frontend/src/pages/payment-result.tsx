@@ -11,7 +11,7 @@ import { SmartImage } from "@/components/common/smart-image";
 import { useOrder } from "@/hooks/use-orders";
 import { formatDateTime, formatNumber, formatToman, toFaDigits } from "@/lib/format";
 import { readLastPayment } from "@/lib/payment-session";
-import type { Order } from "@/types/api";
+import { isPaidOrderStatus, ORDER_STATUS_LABELS, type Order } from "@/types/api";
 
 /** One line of the receipt. */
 function ReceiptRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -125,7 +125,12 @@ export function PaymentResultPage() {
 
   // Remembered from the redirect: only used to decorate the failure screens.
   const remembered = stored && stored.orderId === orderId ? stored : undefined;
-  const paid = order.data?.status === "paid";
+  // `paid` is the first of several captured statuses: by the time the customer
+  // comes back, the warehouse may already have moved the order to processing or
+  // even shipped it. Anything at or past `paid` means the payment succeeded.
+  const paid = isPaidOrderStatus(order.data?.status);
+  // No id in the return URL is a different failure from "we could not read it".
+  const missingOrder = !orderId;
 
   if (status === "error") {
     return (
@@ -197,13 +202,15 @@ export function PaymentResultPage() {
         <>
           <Alert variant="destructive" className="mb-6">
             <AlertTriangle className="size-4" />
-            <AlertTitle>{order.isError && !orderId ? "سفارشی برای نمایش نیست" : "پرداخت انجام نشد"}</AlertTitle>
+            <AlertTitle>{missingOrder ? "سفارشی برای نمایش نیست" : "پرداخت انجام نشد"}</AlertTitle>
             <AlertDescription>
-              {order.isError && !orderId
+              {missingOrder
                 ? "نشانی بازگشت شناسهٔ سفارش را همراه ندارد. اگر مبلغی از حساب شما کسر شده است، با پشتیبانی تماس بگیرید."
                 : order.isError
                   ? "وضعیت این سفارش قابل خواندن نبود. با ورود به حساب کاربری، وضعیت واقعی سفارش را ببینید."
-                  : "پرداخت این سفارش تکمیل نشده است. اگر مبلغی از حساب شما کسر شده باشد حداکثر تا ۷۲ ساعت به‌صورت خودکار بازگردانده می‌شود."}
+                  : order.data?.status === "canceled"
+                    ? "این سفارش لغو شده است. اگر مبلغی از حساب شما کسر شده باشد حداکثر تا ۷۲ ساعت به‌صورت خودکار بازگردانده می‌شود."
+                    : "پرداخت این سفارش تکمیل نشده است. اگر مبلغی از حساب شما کسر شده باشد حداکثر تا ۷۲ ساعت به‌صورت خودکار بازگردانده می‌شود."}
             </AlertDescription>
           </Alert>
 
@@ -211,7 +218,10 @@ export function PaymentResultPage() {
             <Card className="mb-6">
               <CardContent className="space-y-3 py-6">
                 <ReceiptRow label="شماره سفارش" value={<span dir="ltr">{order.data.code}</span>} />
-                <ReceiptRow label="وضعیت" value="در انتظار پرداخت" />
+                <ReceiptRow
+                  label="وضعیت"
+                  value={ORDER_STATUS_LABELS[order.data.status] ?? order.data.status}
+                />
                 <ReceiptRow label="مبلغ سفارش" value={formatToman(order.data.total)} />
                 {order.data.payment?.message && (
                   <ReceiptRow label="پیام درگاه" value={<span className="text-xs">{order.data.payment.message}</span>} />

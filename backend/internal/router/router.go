@@ -2,6 +2,9 @@
 package router
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -44,7 +47,15 @@ func New(d Deps) *fiber.App {
 		ReadTimeout:           10 * time.Second,
 		WriteTimeout:          20 * time.Second,
 		ProxyHeader:           proxyHeader(d.Config),
-		ErrorHandler:          errorHandler,
+		// EnableTrustedProxyCheck is what makes ProxyHeader safe to honour:
+		// Fiber then reads the header only when the immediate peer is in
+		// TrustedProxies, and ignores it otherwise. Without this, c.IP() returns
+		// whatever the client sent and the limiter below is trivially bypassed
+		// by rotating X-Forwarded-For.
+		EnableTrustedProxyCheck: d.Config.TrustProxyHeader,
+		TrustedProxies:          d.Config.TrustedProxies,
+		EnableIPValidation:      true,
+		ErrorHandler:            errorHandler,
 	})
 
 	app.Use(requestid.New())
@@ -58,21 +69,36 @@ func New(d Deps) *fiber.App {
 	}))
 
 	// Brute-force protection on the credential endpoints.
-	authLimiter := limiter.New(limiter.Config{
+	//
+	// Two limiters run together, because each covers the other's blind spot:
+	// the per-IP one stops one host spraying many accounts, and the per-identity
+	// one stops a distributed or proxy-rotating attacker from getting a fresh
+	// budget per address. The account key comes from the request body, which the
+	// client cannot forge into a *different* identity than the one it is
+	// attacking.
+	ipLimiter := limiter.New(limiter.Config{
 		Max:        20,
 		Expiration: time.Minute,
 		KeyGenerator: func(c *fiber.Ctx) string {
 			return c.IP()
 		},
-		LimitReached: func(c *fiber.Ctx) error {
-			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-				"error": fiber.Map{
-					"code":    "too_many_requests",
-					"message": "تلاش‌های بیش از حد. لطفاً کمی بعد دوباره امتحان کنید.",
-				},
-			})
-		},
+		LimitReached: rateLimited,
 	})
+
+	identityLimiter := limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return identityKey(c)
+		},
+		LimitReached: rateLimited,
+	})
+
+	// guarded builds the middleware chain for a credential endpoint: both
+	// limiters, then the handler.
+	guarded := func(h fiber.Handler) []fiber.Handler {
+		return []fiber.Handler{ipLimiter, identityLimiter, h}
+	}
 
 	api := app.Group("/api/v1")
 
@@ -82,12 +108,12 @@ func New(d Deps) *fiber.App {
 
 	// ---- auth ----
 	auth := api.Group("/auth")
-	auth.Post("/register", authLimiter, d.Auth.Register)
+	auth.Post("/register", guarded(d.Auth.Register)...)
 	// The code request is limited like the credential endpoints: it is the one
 	// route that will cost money the moment a real SMS panel is connected.
-	auth.Post("/register/code", authLimiter, d.Auth.RegisterCode)
-	auth.Post("/login", authLimiter, d.Auth.Login)
-	auth.Post("/refresh", authLimiter, d.Auth.Refresh)
+	auth.Post("/register/code", guarded(d.Auth.RegisterCode)...)
+	auth.Post("/login", guarded(d.Auth.Login)...)
+	auth.Post("/refresh", guarded(d.Auth.Refresh)...)
 	auth.Post("/logout", d.AuthMW.RequireAuth, d.Auth.Logout)
 	auth.Get("/me", d.AuthMW.RequireAuth, d.Auth.Me)
 	auth.Patch("/password", d.AuthMW.RequireAuth, d.Auth.ChangePassword)
@@ -222,6 +248,59 @@ func proxyHeader(cfg *config.Config) string {
 		return ""
 	}
 	return cfg.ProxyHeader
+}
+
+// rateLimited renders the shared 429 body.
+func rateLimited(c *fiber.Ctx) error {
+	return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+		"error": fiber.Map{
+			"code":    "too_many_requests",
+			"message": "تلاش‌های بیش از حد. لطفاً کمی بعد دوباره امتحان کنید.",
+		},
+	})
+}
+
+// identityKey derives a rate-limit bucket from the credential the request is
+// aimed at — the email being logged into, the phone being registered or the
+// token being refreshed — so the budget follows the target account rather than
+// the caller's address.
+//
+// It deliberately never returns the raw value: the key is a hash, so the
+// limiter's in-memory store does not become a list of the emails and phone
+// numbers that were tried.
+func identityKey(c *fiber.Ctx) string {
+	var body struct {
+		Email        string `json:"email"`
+		Phone        string `json:"phone"`
+		RefreshToken string `json:"refreshToken"`
+	}
+	// A body that will not parse is the validator's problem, not the limiter's;
+	// fall back to the caller's address so the request is still counted.
+	if err := json.Unmarshal(c.Body(), &body); err != nil {
+		return "ip:" + c.IP()
+	}
+
+	identity := strings.ToLower(strings.TrimSpace(firstNonEmpty(body.Email, body.Phone)))
+	if identity == "" && body.RefreshToken != "" {
+		// Refresh has no email; key on the token itself so replaying one stolen
+		// token cannot outrun the limit by changing address.
+		sum := sha256.Sum256([]byte(body.RefreshToken))
+		return "rt:" + hex.EncodeToString(sum[:8])
+	}
+	if identity == "" {
+		return "ip:" + c.IP()
+	}
+	sum := sha256.Sum256([]byte(identity))
+	return "id:" + hex.EncodeToString(sum[:8])
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // errorHandler renders Fiber-level errors (e.g. bad JSON) in the shared shape.

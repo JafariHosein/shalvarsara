@@ -29,6 +29,10 @@ type Claims struct {
 	UserID int64     `json:"uid"`
 	Role   string    `json:"role"`
 	Type   TokenType `json:"typ"`
+	// Version mirrors users.token_version at the time the token was minted.
+	// A token whose version no longer matches the stored one has been revoked
+	// (logout, password change, deactivation) and is rejected.
+	Version int32 `json:"ver"`
 	jwt.RegisteredClaims
 }
 
@@ -58,14 +62,14 @@ func NewTokenService(cfg config.JWTConfig) *TokenService {
 }
 
 // Generate mints a fresh access/refresh pair for a user.
-func (s *TokenService) Generate(userID int64, role model.Role) (TokenPair, error) {
+func (s *TokenService) Generate(userID int64, role model.Role, tokenVersion int32) (TokenPair, error) {
 	now := time.Now()
 
-	access, err := s.sign(userID, role, TokenAccess, now, s.accessTTL, s.accessSecret)
+	access, err := s.sign(userID, role, tokenVersion, TokenAccess, now, s.accessTTL, s.accessSecret)
 	if err != nil {
 		return TokenPair{}, err
 	}
-	refresh, err := s.sign(userID, role, TokenRefresh, now, s.refreshTTL, s.refreshSecret)
+	refresh, err := s.sign(userID, role, tokenVersion, TokenRefresh, now, s.refreshTTL, s.refreshSecret)
 	if err != nil {
 		return TokenPair{}, err
 	}
@@ -77,14 +81,18 @@ func (s *TokenService) Generate(userID int64, role model.Role) (TokenPair, error
 	}, nil
 }
 
-func (s *TokenService) sign(userID int64, role model.Role, typ TokenType, now time.Time, ttl time.Duration, secret []byte) (string, error) {
+func (s *TokenService) sign(
+	userID int64, role model.Role, tokenVersion int32, typ TokenType,
+	now time.Time, ttl time.Duration, secret []byte,
+) (string, error) {
 	claims := Claims{
-		UserID: userID,
-		Role:   string(role),
-		Type:   typ,
+		UserID:  userID,
+		Role:    string(role),
+		Type:    typ,
+		Version: tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   fmt.Sprintf("%d", userID),
-			Issuer:    "shalvarsara",
+			Issuer:    tokenIssuer,
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
@@ -92,6 +100,10 @@ func (s *TokenService) sign(userID int64, role model.Role, typ TokenType, now ti
 	}
 	return jwt.NewWithClaims(signingMethod, claims).SignedString(secret)
 }
+
+// tokenIssuer is checked on parse, so a token minted by another service that
+// happens to share a secret is not accepted here.
+const tokenIssuer = "shalvarsara"
 
 // Parse verifies a token and asserts it is of the expected type.
 func (s *TokenService) Parse(raw string, want TokenType) (*Claims, error) {
@@ -103,7 +115,11 @@ func (s *TokenService) Parse(raw string, want TokenType) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (any, error) {
 		return secret, nil
-	}, jwt.WithValidMethods([]string{signingMethod.Alg()}))
+	},
+		jwt.WithValidMethods([]string{signingMethod.Alg()}),
+		jwt.WithIssuer(tokenIssuer),
+		jwt.WithExpirationRequired(),
+	)
 	if err != nil || !token.Valid {
 		return nil, model.ErrUnauthorized
 	}

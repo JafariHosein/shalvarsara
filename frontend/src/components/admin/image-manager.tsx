@@ -123,17 +123,7 @@ export function ImageManager({ product }: { product: Product }) {
                         variant="ghost"
                         size="sm"
                         className="gap-1 px-2 text-xs"
-                        onClick={() =>
-                          update.mutate({
-                            id: image.id,
-                            body: {
-                              url: image.url,
-                              alt: image.alt,
-                              isPrimary: true,
-                              sortOrder: image.sortOrder,
-                            },
-                          })
-                        }
+                        onClick={() => update.mutate({ id: image.id, body: { isPrimary: true } })}
                       >
                         <Star className="size-3.5" />
                         اصلی کن
@@ -171,7 +161,9 @@ export function ImageManager({ product }: { product: Product }) {
           <DialogHeader>
             <DialogTitle className="text-start">{editing ? "ویرایش تصویر" : "افزودن تصویر"}</DialogTitle>
             <DialogDescription className="text-start">
-              نشانی تصویر را از میزبان فایل‌های خود کپی کنید (نشانی باید با http یا https شروع شود).
+              نشانی کامل تصویر (با http یا https) یا مسیر داخلی سایت که با «/» شروع می‌شود — مثل
+              <span dir="ltr" className="mx-1">/products/denim-1.webp</span>
+              که همان تصاویر همراه برنامه است.
             </DialogDescription>
           </DialogHeader>
 
@@ -184,8 +176,11 @@ export function ImageManager({ product }: { product: Product }) {
                   <FormItem>
                     <FormLabel>نشانی تصویر</FormLabel>
                     <FormControl>
-                      <Input {...field} dir="ltr" className="text-start" placeholder="https://…/image.jpg" />
+                      <Input {...field} dir="ltr" className="text-start" placeholder="/products/image.webp" />
                     </FormControl>
+                    <FormDescription>
+                      آدرس مطلق <span dir="ltr">https://…</span> یا مسیر داخلی شروع‌شده با «/».
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

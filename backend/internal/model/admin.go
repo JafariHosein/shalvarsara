@@ -29,21 +29,36 @@ type AdminProductInput struct {
 }
 
 // AdminVariantInput is a size/colour combination as the admin form sends it.
+//
+// POST (create) requires Size and Color. PATCH (update) treats every field as
+// optional: a nil field is left as it stands. Without the pointers a partial
+// PATCH would silently write the zero value, so toggling one field from a list
+// row would wipe the rest — and a variant's `stock` reaching 0 by accident
+// takes the size off sale.
 type AdminVariantInput struct {
-	Size       string `json:"size" validate:"required,max=20"`
-	Color      string `json:"color" validate:"required,max=40"`
-	ColorHex   string `json:"colorHex" validate:"omitempty,max=9"`
-	Stock      int32  `json:"stock" validate:"gte=0"`
-	SKU        string `json:"sku" validate:"omitempty,max=64"`
-	ExtraPrice int64  `json:"extraPrice" validate:"gte=0"`
+	Size       *string `json:"size" validate:"omitempty,min=1,max=20"`
+	Color      *string `json:"color" validate:"omitempty,min=1,max=40"`
+	ColorHex   *string `json:"colorHex" validate:"omitempty,max=9"`
+	Stock      *int32  `json:"stock" validate:"omitempty,gte=0"`
+	SKU        *string `json:"sku" validate:"omitempty,max=64"`
+	ExtraPrice *int64  `json:"extraPrice" validate:"omitempty,gte=0"`
 }
 
 // AdminImageInput is one gallery image.
+//
+// The URL is not restricted to absolute addresses: the seeded catalogue stores
+// app-relative paths ("/products/…"), and so does anything served from the
+// frontend's own public directory. The service checks that it is either an
+// http(s) URL or a rooted path — see AdminService.validateImageURL.
+//
+// Like AdminVariantInput, the fields are pointers so a PATCH only rewrites what
+// it was sent: `isPrimary` in particular is a one-click action in the image
+// manager, and a zero value there would quietly demote the primary image.
 type AdminImageInput struct {
-	URL       string `json:"url" validate:"required,url,max=500"`
-	Alt       string `json:"alt" validate:"omitempty,max=300"`
-	IsPrimary bool   `json:"isPrimary"`
-	SortOrder int32  `json:"sortOrder"`
+	URL       *string `json:"url" validate:"omitempty,max=500"`
+	Alt       *string `json:"alt" validate:"omitempty,max=300"`
+	IsPrimary *bool   `json:"isPrimary"`
+	SortOrder *int32  `json:"sortOrder"`
 }
 
 // AdminCategoryInput is the writable surface of a category.
@@ -98,13 +113,18 @@ type AdminShipmentInput struct {
 
 // CanTransition reports whether status may follow from — the pipeline is one
 // way, and only a live order can still be cancelled.
+//
+// `pending → paid` is deliberately absent: an order becomes paid only when the
+// gateway confirms the money (PaymentRepository.Complete), which is the single
+// place that can also check the order was still payable. Allowing an admin to
+// declare it paid by hand would let revenue and the payments table disagree.
 func CanTransition(from, to string) bool {
 	if from == to {
 		return false
 	}
 	switch from {
 	case OrderPending:
-		return to == OrderPaid || to == OrderCanceled
+		return to == OrderCanceled
 	case OrderPaid:
 		return to == OrderProcessing || to == OrderCanceled
 	case OrderProcessing:
@@ -114,6 +134,33 @@ func CanTransition(from, to string) bool {
 	default: // delivered, canceled
 		return false
 	}
+}
+
+// OrderStatuses lists every order status, for validating a filter or a request
+// before it reaches a PostgreSQL enum cast.
+var OrderStatuses = []string{
+	OrderPending, OrderPaid, OrderProcessing, OrderShipped, OrderDelivered, OrderCanceled,
+}
+
+// PaymentStatuses lists every payment status.
+var PaymentStatuses = []string{PaymentInitiated, PaymentVerified, PaymentFailed}
+
+// ValidOrderStatus reports whether s is a known order status.
+func ValidOrderStatus(s string) bool { return contains(OrderStatuses, s) }
+
+// ValidPaymentStatus reports whether s is a known payment status.
+func ValidPaymentStatus(s string) bool { return contains(PaymentStatuses, s) }
+
+// ValidRole reports whether s is a known user role.
+func ValidRole(s string) bool { return s == string(RoleCustomer) || s == string(RoleAdmin) }
+
+func contains(values []string, s string) bool {
+	for _, v := range values {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------- payments ----------

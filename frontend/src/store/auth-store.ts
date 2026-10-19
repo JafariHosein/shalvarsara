@@ -1,8 +1,9 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 
-import { CART_QUERY_KEY, syncGuestCart } from "@/lib/cart-cache";
+import { syncGuestCart } from "@/lib/cart-cache";
 import { queryClient } from "@/lib/query-client";
-import { clearTokens, getAccessToken, setTokens } from "@/lib/token";
+import { AUTH_CLEARED_EVENT, clearTokens, getAccessToken, setTokens } from "@/lib/token";
 import { authService, type LoginPayload, type RegisterPayload } from "@/services/auth";
 import type { User } from "@/types/api";
 
@@ -20,6 +21,38 @@ interface AuthState {
   setUser: (user: User) => void;
 }
 
+/**
+ * Drop every cached response and forget the signed-in user.
+ *
+ * Clearing the whole query cache — not just the cart — is what stops the next
+ * person on a shared browser from seeing the previous account's wishlist, order
+ * history and saved addresses: those queries are keyed only by their own name,
+ * so their cached pages would otherwise be served straight back.
+ */
+function resetSession(): void {
+  queryClient.clear();
+  useAuthStore.setState({ user: null, status: "anonymous" });
+}
+
+/**
+ * Carry the browser cart over to the account that just signed in.
+ *
+ * The guest cart is cleared by the merge itself once the server accepts it, so
+ * a failure here leaves it intact and the next sign-in retries. The outcome is
+ * reported: silently dropping lines the server refused (delisted or out of
+ * stock) would look like the basket vanished.
+ */
+async function transferGuestCart(): Promise<void> {
+  const skipped = await syncGuestCart();
+  if (skipped < 0) {
+    toast.warning("سبد خرید مهمان به حساب شما منتقل نشد. پس از ورود دوباره تلاش کنید.");
+    return;
+  }
+  if (skipped > 0) {
+    toast.warning(`${skipped.toLocaleString("fa-IR")} کالا از سبد مهمان منتقل نشد (ناموجود یا حذف‌شده).`);
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   status: "loading",
@@ -31,7 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     setTokens(tokens);
     set({ user, status: "authenticated" });
     // Whatever the visitor collected before signing in belongs to their account.
-    await syncGuestCart();
+    await transferGuestCart();
     return user;
   },
 
@@ -39,23 +72,23 @@ export const useAuthStore = create<AuthState>((set) => ({
     const { user, tokens } = await authService.register(payload);
     setTokens(tokens);
     set({ user, status: "authenticated" });
-    await syncGuestCart();
+    await transferGuestCart();
     return user;
   },
 
   logout: async () => {
     try {
-      // Best effort: the server has nothing to revoke for stateless JWTs, but
-      // calling it keeps the client honest if that ever changes.
+      // The server bumps the account's token version, so every access and
+      // refresh token issued before this call stops working — including any
+      // copy a thief may hold.
       await authService.logout();
     } catch {
-      /* ignore network errors on logout */
+      /* ignore network errors on logout; the local session goes anyway */
     }
     clearTokens();
     // The server cart stays with the account; the next visitor on this browser
     // starts from an empty guest cart.
-    queryClient.removeQueries({ queryKey: CART_QUERY_KEY });
-    set({ user: null, status: "anonymous" });
+    resetSession();
   },
 
   bootstrap: async () => {
@@ -67,7 +100,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const user = await authService.me();
       set({ user, status: "authenticated" });
       // A guest cart can survive from another tab's sign-in.
-      await syncGuestCart();
+      await transferGuestCart();
     } catch {
       // Token missing, expired beyond refresh, or the account was deactivated.
       clearTokens();
@@ -75,6 +108,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 }));
+
+// A 401 the refresh could not fix clears the tokens from the API client. That
+// happens outside this store, so listen for it and reset — otherwise the UI
+// would keep rendering protected pages while every request quietly failed.
+window.addEventListener(AUTH_CLEARED_EVENT, () => {
+  queryClient.clear();
+  useAuthStore.setState({ user: null, status: "anonymous" });
+});
 
 /** Convenience selectors used across the UI. */
 export const useCurrentUser = () => useAuthStore((state) => state.user);

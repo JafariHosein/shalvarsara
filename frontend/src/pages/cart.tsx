@@ -9,8 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { SmartImage } from "@/components/common/smart-image";
 import { useCart } from "@/hooks/use-cart";
+import { useOrderPreview } from "@/hooks/use-orders";
 import { formatNumber, formatToman, toFaDigits } from "@/lib/format";
 import { FREE_SHIPPING_THRESHOLD, shippingCost } from "@/lib/shipping";
+import { useIsAuthenticated } from "@/store/auth-store";
 import type { CartLine } from "@/store/cart-store";
 
 /** Warning shown when a line can no longer be bought as it stands. */
@@ -33,11 +35,19 @@ function LineWarning({ line }: { line: CartLine }) {
 
 /** Cart page. Reads the server cart when signed in, the browser cart otherwise. */
 export function CartPage() {
-  const { lines, subtotal, isLoading, remove, setQuantity, clear } = useCart();
+  const { lines, subtotal, isLoading, isError, refetch, remove, setQuantity, clear } = useCart();
+  const isAuthenticated = useIsAuthenticated();
 
-  const shipping = shippingCost(subtotal);
-  const total = subtotal + shipping;
-  const hasUnavailable = lines.some((line) => !line.isAvailable);
+  // Delivery and discounts are priced on the server, so a signed-in visitor sees
+  // the exact figures checkout will charge. The local mirror in lib/shipping is
+  // only a fallback for guests (who cannot call the preview endpoint) and for
+  // the moment before the first preview response lands.
+  const preview = useOrderPreview(undefined, { enabled: isAuthenticated && lines.length > 0 });
+
+  const shipping = preview.data?.shippingCost ?? shippingCost(subtotal);
+  const total = preview.data?.total ?? subtotal + shipping;
+  const freeFrom = preview.data?.freeFrom ?? FREE_SHIPPING_THRESHOLD;
+  const hasUnavailable = preview.data?.hasUnavailable ?? lines.some((line) => !line.isAvailable);
 
   if (isLoading && lines.length === 0) {
     return (
@@ -46,6 +56,21 @@ export function CartPage() {
         {[0, 1, 2].map((index) => (
           <Skeleton key={index} className="h-32 w-full rounded-lg" />
         ))}
+      </div>
+    );
+  }
+
+  // A failed fetch is not an empty cart: showing "your cart is empty" would let
+  // the customer believe the cart was lost and start over.
+  if (isError && lines.length === 0) {
+    return (
+      <div className="container py-16">
+        <EmptyState
+          title="سبد خرید خوانده نشد"
+          description="ارتباط با سرور برقرار نشد. اتصال اینترنت خود را بررسی کنید و دوباره تلاش کنید."
+        >
+          <Button onClick={() => void refetch()}>تلاش دوباره</Button>
+        </EmptyState>
       </div>
     );
   }
@@ -173,8 +198,17 @@ export function CartPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">جمع کالاها</span>
-                <span className="font-medium">{formatToman(subtotal)}</span>
+                <span className="font-medium">{formatToman(preview.data?.subtotal ?? subtotal)}</span>
               </div>
+
+              {(preview.data?.discount ?? 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    تخفیف{preview.data?.couponCode ? ` (${preview.data.couponCode})` : ""}
+                  </span>
+                  <span className="font-medium text-primary">−{formatToman(preview.data?.discount ?? 0)}</span>
+                </div>
+              )}
 
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">هزینه ارسال</span>
@@ -185,7 +219,7 @@ export function CartPage() {
 
               {shipping > 0 && (
                 <p className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
-                  با {formatToman(FREE_SHIPPING_THRESHOLD - subtotal)} خرید بیشتر، ارسال رایگان می‌شود.
+                  با {formatToman(freeFrom - subtotal)} خرید بیشتر، ارسال رایگان می‌شود.
                 </p>
               )}
 
@@ -202,12 +236,24 @@ export function CartPage() {
                 </p>
               )}
 
-              <Button asChild size="lg" className="w-full" disabled={hasUnavailable}>
-                <Link to="/checkout">
+              {/*
+                A disabled <a> is not a thing: `disabled` on a Button that has
+                `asChild` is dropped on the floor, so the link stayed clickable.
+                Render a real disabled button in that state instead.
+              */}
+              {hasUnavailable ? (
+                <Button size="lg" className="w-full" disabled>
                   <ShieldCheck className="size-4" />
                   ادامه فرآیند خرید
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button asChild size="lg" className="w-full">
+                  <Link to="/checkout">
+                    <ShieldCheck className="size-4" />
+                    ادامه فرآیند خرید
+                  </Link>
+                </Button>
+              )}
 
               <p className="flex items-start justify-center gap-1.5 text-xs text-muted-foreground">
                 <ShieldCheck className="mt-px size-3.5 shrink-0 text-primary" />

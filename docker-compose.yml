@@ -6,13 +6,20 @@ services:
     container_name: shalvarsara-db
     restart: unless-stopped
     env_file:
-      - .env
+      # Optional: the defaults below are enough for local development, so a
+      # missing root .env must not stop `docker compose up`.
+      - path: .env
+        required: false
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-shalvarsara}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shalvarsara}
       POSTGRES_DB: ${POSTGRES_DB:-shalvarsara}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Bound to the loopback interface on purpose: publishing 5432 on 0.0.0.0
+      # exposes the database to the whole local network, and on a laptop that
+      # joins untrusted Wi-Fi it is reachable by anyone on the same subnet.
+      # The backend service reaches it over the compose network as `db:5432`.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +35,8 @@ services:
     container_name: shalvarsara-backend
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-shalvarsara}:${POSTGRES_PASSWORD:-shalvarsara}@db:5432/${POSTGRES_DB:-shalvarsara}?sslmode=disable
       RUN_MIGRATIONS: "true"

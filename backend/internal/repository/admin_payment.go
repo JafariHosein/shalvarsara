@@ -45,10 +45,11 @@ func buildAdminPaymentFilter(f model.AdminPaymentFilter) (string, []any) {
 		conds = append(conds, "p.status = $"+strconv.Itoa(len(args))+"::payment_status")
 	}
 	if q := strings.TrimSpace(f.Query); q != "" {
-		args = append(args, "%"+q+"%")
+		args = append(args, likePattern(q))
 		ph := "$" + strconv.Itoa(len(args))
-		conds = append(conds, "(o.code ILIKE "+ph+" OR COALESCE(p.authority, '') ILIKE "+ph+
-			" OR COALESCE(p.ref_id, '') ILIKE "+ph+")")
+		conds = append(conds, "(o.code ILIKE "+ph+` ESCAPE '\'`+
+			" OR COALESCE(p.authority, '') ILIKE "+ph+` ESCAPE '\'`+
+			" OR COALESCE(p.ref_id, '') ILIKE "+ph+` ESCAPE '\'`+")")
 	}
 	return "WHERE " + strings.Join(conds, " AND "), args
 }

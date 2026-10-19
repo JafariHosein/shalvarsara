@@ -56,7 +56,7 @@ func run() error {
 	}
 
 	if cfg.SeedOnStart {
-		if err := seeder.Seed(ctx, db, cfg.Admin); err != nil {
+		if err := seeder.Seed(ctx, db, cfg.Admin, cfg.AppEnv); err != nil {
 			return err
 		}
 	}
@@ -110,6 +110,15 @@ func run() error {
 		AuthMW:   middleware.NewAuth(tokens, userRepo),
 	})
 
+	// ---- background jobs ----
+	//
+	// Unpaid orders hold the stock they reserved. The sweeper is what stops an
+	// abandoned checkout from taking a product off sale indefinitely; it shares
+	// the cancellation path with the admin panel, so stock and coupon
+	// bookkeeping are identical.
+	stopSweeper := startOrderExpirySweeper(ctx, orderRepo, cfg.OrderExpiry)
+	defer stopSweeper()
+
 	// ---- serve ----
 	serveErr := make(chan error, 1)
 	go func() {
@@ -128,6 +137,59 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return app.ShutdownWithContext(shutdownCtx)
+}
+
+// startOrderExpirySweeper cancels unpaid orders in the background and returns a
+// function that stops it.
+//
+// It is a plain ticker rather than an external scheduler so a single-instance
+// deployment needs no extra infrastructure. The work is idempotent, so running
+// several instances side by side is harmless: whichever one gets there first
+// performs the cancel and the others see a no-longer-pending order.
+func startOrderExpirySweeper(
+	ctx context.Context, orders *repository.OrderRepository, expiry time.Duration,
+) func() {
+	if expiry <= 0 {
+		log.Info().Msg("order expiry sweeper disabled")
+		return func() {}
+	}
+
+	// Sweep every five minutes, or every `expiry` if that is shorter, so a
+	// short expiry is still honoured promptly.
+	interval := 5 * time.Minute
+	if expiry < interval {
+		interval = expiry
+	}
+
+	sweepCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-sweepCtx.Done():
+				return
+			case <-ticker.C:
+				expired, err := orders.ExpirePendingOrders(sweepCtx, expiry, 200)
+				if err != nil {
+					log.Error().Err(err).Msg("order expiry sweep failed")
+					continue
+				}
+				if expired > 0 {
+					log.Info().Int("orders", expired).Msg("expired unpaid orders")
+				}
+			}
+		}
+	}()
+
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 // connectWithRetry waits for the database to accept connections. This makes the

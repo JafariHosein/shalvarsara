@@ -33,8 +33,8 @@ func (r *CouponRepository) ListCoupons(ctx context.Context, query string, limit,
 	where := "TRUE"
 	args := []any{}
 	if q := strings.TrimSpace(query); q != "" {
-		args = append(args, "%"+strings.ToUpper(q)+"%")
-		where = "code ILIKE $1"
+		args = append(args, likePattern(strings.ToUpper(q)))
+		where = `code ILIKE $1 ESCAPE '\'`
 	}
 
 	var total int64

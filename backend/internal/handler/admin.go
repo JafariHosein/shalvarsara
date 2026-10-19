@@ -31,6 +31,15 @@ func paramID(c *fiber.Ctx) (int64, error) {
 	return id, nil
 }
 
+// badFilter reports an unusable list-filter value as a 400 with a message that
+// names the field, instead of letting it fail as a database cast error.
+func badFilter(field string) error {
+	return &model.UserFacingError{
+		Err:  model.ErrValidation,
+		Text: "مقدار «" + field + "» در جستجو معتبر نیست.",
+	}
+}
+
 // ---- dashboard ----
 
 // Stats returns the dashboard numbers.
@@ -274,6 +283,11 @@ func (h *AdminHandler) ListOrders(c *fiber.Ctx) error {
 		Page:   queryInt(c, "page", 1),
 		Limit:  queryInt(c, "limit", 20),
 	}
+	// A mistyped status would otherwise reach a `::order_status` cast and come
+	// back as an unhandled-error 500 instead of a message the admin can fix.
+	if filter.Status != "" && filter.Status != "all" && !model.ValidOrderStatus(filter.Status) {
+		return Fail(c, badFilter("وضعیت سفارش"))
+	}
 	page, err := h.admin.ListOrders(c.Context(), filter)
 	if err != nil {
 		return Fail(c, err)
@@ -293,6 +307,9 @@ func (h *AdminHandler) ListPayments(c *fiber.Ctx) error {
 		Status: queryString(c, "status"),
 		Page:   queryInt(c, "page", 1),
 		Limit:  queryInt(c, "limit", 20),
+	}
+	if filter.Status != "" && filter.Status != "all" && !model.ValidPaymentStatus(filter.Status) {
+		return Fail(c, badFilter("وضعیت پرداخت"))
 	}
 	page, err := h.admin.ListPayments(c.Context(), filter)
 	if err != nil {
@@ -357,6 +374,9 @@ func (h *AdminHandler) ListUsers(c *fiber.Ctx) error {
 		Role:  queryString(c, "role"),
 		Page:  queryInt(c, "page", 1),
 		Limit: queryInt(c, "limit", 20),
+	}
+	if filter.Role != "" && filter.Role != "all" && !model.ValidRole(filter.Role) {
+		return Fail(c, badFilter("نقش کاربر"))
 	}
 	page, err := h.admin.ListUsers(c.Context(), filter)
 	if err != nil {

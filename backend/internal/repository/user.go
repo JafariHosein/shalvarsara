@@ -21,7 +21,7 @@ func NewUserRepository(db *database.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-const userColumns = `id, name, email, phone, password_hash, role, is_active, phone_verified_at, created_at, updated_at`
+const userColumns = `id, name, email, phone, password_hash, role, is_active, token_version, phone_verified_at, created_at, updated_at`
 
 // scanUser reads one row into a User, converting the enum to our Role type.
 func scanUser(row pgx.Row) (*model.User, error) {
@@ -31,7 +31,7 @@ func scanUser(row pgx.Row) (*model.User, error) {
 	)
 	err := row.Scan(
 		&u.ID, &u.Name, &u.Email, &u.Phone, &u.PasswordHash,
-		&role, &u.IsActive, &u.PhoneVerifiedAt, &u.CreatedAt, &u.UpdatedAt,
+		&role, &u.IsActive, &u.TokenVersion, &u.PhoneVerifiedAt, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -87,9 +87,30 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, id int64, name, phon
 	return scanUser(r.db.QueryRow(ctx, q, id, name, phone))
 }
 
-// UpdatePassword replaces the stored hash. Callers hash before calling.
+// UpdatePassword replaces the stored hash and invalidates every token issued
+// before the change. Without the version bump, "change your password to lock the
+// attacker out" would not actually end their session: access tokens live 15
+// minutes and refresh tokens 30 days.
 func (r *UserRepository) UpdatePassword(ctx context.Context, id int64, passwordHash string) error {
-	tag, err := r.db.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id = $1`, id, passwordHash)
+	tag, err := r.db.Exec(ctx, `
+		UPDATE users
+		SET password_hash = $2, token_version = token_version + 1
+		WHERE id = $1`, id, passwordHash)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrNotFound
+	}
+	return nil
+}
+
+// BumpTokenVersion invalidates every token issued for the user so far. Logout
+// and an admin deactivation call it, which is what makes "log out everywhere"
+// real for stateless JWTs.
+func (r *UserRepository) BumpTokenVersion(ctx context.Context, id int64) error {
+	tag, err := r.db.Exec(ctx,
+		`UPDATE users SET token_version = token_version + 1 WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

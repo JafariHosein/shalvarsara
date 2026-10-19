@@ -152,9 +152,20 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	return OK(c, authResponse{User: user, Tokens: tokens})
 }
 
-// Logout is a no-op for stateless JWTs: the client discards its tokens. It
-// exists so clients have a single, explicit endpoint to call.
+// Logout revokes the caller's tokens server-side.
+//
+// The tokens are stateless, so "logging out" only means something if the server
+// stops honouring them: the account's token version is bumped, which invalidates
+// every access and refresh token issued before this call — including the copy a
+// thief may be holding.
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		return Fail(c, model.ErrUnauthorized)
+	}
+	if err := h.auth.Logout(c.Context(), user.ID); err != nil {
+		return Fail(c, err)
+	}
 	return NoContent(c)
 }
 

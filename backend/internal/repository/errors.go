@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -33,4 +34,27 @@ func isCheckViolation(err error) bool {
 		return pgErr.Code == "23514"
 	}
 	return false
+}
+
+// isInvalidTextRepresentation reports SQLSTATE 22P02, raised when a value that
+// is not a member of a PostgreSQL enum is cast to it.
+func isInvalidTextRepresentation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "22P02"
+	}
+	return false
+}
+
+// likeEscaper neutralises the LIKE metacharacters in user input.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// likePattern builds a "contains" pattern for ILIKE.
+//
+// Without escaping, a search box value of "%" would match every row and "_"
+// would match any character, so a legitimate-looking query would silently
+// return the whole table (and an arbitrary page of it). Queries using this
+// helper must include `ESCAPE '\'`.
+func likePattern(q string) string {
+	return "%" + likeEscaper.Replace(q) + "%"
 }

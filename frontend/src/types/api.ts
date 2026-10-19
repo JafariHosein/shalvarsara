@@ -169,6 +169,21 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   canceled: "لغو‌شده",
 };
 
+/**
+ * Statuses that mean the money was captured: the order is at `paid` or beyond.
+ *
+ * Anything that asks "did this order go through?" must use this list rather
+ * than comparing against `paid`, otherwise a customer who returns to the result
+ * page after the warehouse moved their order to `processing` is told the
+ * payment failed.
+ */
+export const PAID_ORDER_STATUSES: readonly OrderStatus[] = ["paid", "processing", "shipped", "delivered"];
+
+/** True when `status` means the order has been paid for. */
+export function isPaidOrderStatus(status: OrderStatus | undefined): boolean {
+  return status !== undefined && PAID_ORDER_STATUSES.includes(status);
+}
+
 /** The shipping details copied onto an order when it is placed. */
 export interface ShippingAddress {
   receiverName: string;
@@ -441,20 +456,28 @@ export interface AdminProductInput {
   isFeatured?: boolean;
 }
 
+/**
+ * A size/colour combination as sent to the admin API.
+ *
+ * Every field is optional on the wire: PATCH only writes what it is given, so
+ * a partial update (the image manager's "make primary" button, for instance)
+ * cannot zero the columns it did not mention. Create sends them all.
+ */
 export interface AdminVariantInput {
-  size: string;
-  color: string;
-  colorHex: string;
-  stock: number;
-  sku: string;
-  extraPrice: number;
+  size?: string;
+  color?: string;
+  colorHex?: string;
+  stock?: number;
+  sku?: string;
+  extraPrice?: number;
 }
 
+/** One gallery image. Optional for the same reason as {@link AdminVariantInput}. */
 export interface AdminImageInput {
-  url: string;
-  alt: string;
-  isPrimary: boolean;
-  sortOrder: number;
+  url?: string;
+  alt?: string;
+  isPrimary?: boolean;
+  sortOrder?: number;
 }
 
 export interface AdminCategoryInput {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode"
@@ -84,18 +85,16 @@ func (s *AdminService) ListReviews(
 	return model.NewPage(rows, f.Page, f.Limit, total), nil
 }
 
-// SetReviewStatus records a moderation decision, then keeps the product's
-// public rating in step with what is actually approved: approving a review
-// raises the stars, rejecting or un-approving one lowers them.
+// SetReviewStatus records a moderation decision. The repository refreshes the
+// product's public rating in the same transaction, so approving a review cannot
+// leave the stars stale.
 func (s *AdminService) SetReviewStatus(ctx context.Context, id int64, status string) (*model.Review, error) {
-	review, err := s.reviews.AdminSetStatus(ctx, id, status)
-	if err != nil {
-		return nil, err
+	switch status {
+	case "pending", "approved", "rejected":
+	default:
+		return nil, badInput("وضعیت نظر انتخابی معتبر نیست.")
 	}
-	if err := s.reviews.RecalcProductRating(ctx, review.ProductID); err != nil {
-		return nil, err
-	}
-	return review, nil
+	return s.reviews.AdminSetStatus(ctx, id, status)
 }
 
 // translit maps Persian/Arabic letters and digits to Latin ones. Slugs are
@@ -324,21 +323,30 @@ func (s *AdminService) mergeProduct(ctx context.Context, p *model.Product, in mo
 // ---------- variants ----------
 
 // CreateVariant adds a size/colour combination and returns the product.
+//
+// Size and Color are required here even though the input type makes them
+// optional, because a create has no previous value to fall back on.
 func (s *AdminService) CreateVariant(ctx context.Context, productID int64, in model.AdminVariantInput) (*model.Product, error) {
 	if _, err := s.products.GetByID(ctx, productID, true); err != nil {
 		return nil, err
 	}
+	size := derefString(in.Size)
+	color := derefString(in.Color)
+	if size == "" || color == "" {
+		return nil, badInput("اندازه و رنگ واریانت الزامی است.")
+	}
+	stock := derefInt32(in.Stock)
+	if stock < 0 {
+		return nil, badInput("موجودی نمی‌تواند منفی باشد.")
+	}
 	v := &model.ProductVariant{
 		ProductID:  productID,
-		Size:       strings.TrimSpace(in.Size),
-		Color:      strings.TrimSpace(in.Color),
-		ColorHex:   colorHex(in.ColorHex),
-		Stock:      in.Stock,
-		SKU:        strings.TrimSpace(in.SKU),
-		ExtraPrice: in.ExtraPrice,
-	}
-	if v.Size == "" || v.Color == "" {
-		return nil, badInput("اندازه و رنگ واریانت الزامی است.")
+		Size:       size,
+		Color:      color,
+		ColorHex:   colorHex(derefString(in.ColorHex)),
+		Stock:      stock,
+		SKU:        derefString(in.SKU),
+		ExtraPrice: derefInt64(in.ExtraPrice),
 	}
 	if err := s.products.CreateVariant(ctx, v); err != nil {
 		return nil, err
@@ -346,20 +354,40 @@ func (s *AdminService) CreateVariant(ctx context.Context, productID int64, in mo
 	return s.products.GetByID(ctx, productID, true)
 }
 
-// UpdateVariant rewrites one variant and returns its product.
+// UpdateVariant patches one variant and returns its product.
+//
+// Every field is optional: only what the caller actually sent is written, so a
+// PATCH that flips one column cannot zero the others.
 func (s *AdminService) UpdateVariant(ctx context.Context, id int64, in model.AdminVariantInput) (*model.Product, error) {
 	v, err := s.variantProduct(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	v.Size = strings.TrimSpace(in.Size)
-	v.Color = strings.TrimSpace(in.Color)
-	v.ColorHex = colorHex(in.ColorHex)
-	v.Stock = in.Stock
-	v.SKU = strings.TrimSpace(in.SKU)
-	v.ExtraPrice = in.ExtraPrice
+
+	if in.Size != nil {
+		v.Size = strings.TrimSpace(*in.Size)
+	}
+	if in.Color != nil {
+		v.Color = strings.TrimSpace(*in.Color)
+	}
+	if in.ColorHex != nil {
+		v.ColorHex = colorHex(*in.ColorHex)
+	}
+	if in.Stock != nil {
+		v.Stock = *in.Stock
+	}
+	if in.SKU != nil {
+		v.SKU = strings.TrimSpace(*in.SKU)
+	}
+	if in.ExtraPrice != nil {
+		v.ExtraPrice = *in.ExtraPrice
+	}
+
 	if v.Size == "" || v.Color == "" {
 		return nil, badInput("اندازه و رنگ واریانت الزامی است.")
+	}
+	if v.Stock < 0 || v.ExtraPrice < 0 {
+		return nil, badInput("موجودی و اختلاف قیمت نمی‌توانند منفی باشند.")
 	}
 	if _, err := s.products.UpdateVariant(ctx, v); err != nil {
 		return nil, err
@@ -367,9 +395,42 @@ func (s *AdminService) UpdateVariant(ctx context.Context, id int64, in model.Adm
 	return s.products.GetByID(ctx, v.ProductID, true)
 }
 
+// derefString trims a pointer-to-string, treating nil as "".
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return strings.TrimSpace(*p)
+}
+
+// derefInt32 reads a pointer-to-int32, treating nil as 0.
+func derefInt32(p *int32) int32 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// derefInt64 reads a pointer-to-int64, treating nil as 0.
+func derefInt64(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
 // DeleteVariant removes one variant.
 func (s *AdminService) DeleteVariant(ctx context.Context, id int64) error {
-	return s.products.DeleteVariant(ctx, id)
+	v, err := s.variantProduct(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.products.DeleteVariant(ctx, id); err != nil {
+		return err
+	}
+	// Removing a variant changes what the product as a whole can sell, so the
+	// aggregate has to be recomputed here too.
+	return s.products.SyncProductStock(ctx, v.ProductID)
 }
 
 // variantProduct loads a variant so its product can be returned to the UI.
@@ -395,16 +456,23 @@ func colorHex(raw string) string {
 // ---------- images ----------
 
 // CreateImage appends a gallery image and returns the product.
+//
+// The URL is required here even though the input type makes it optional: a
+// create has no previous address to keep.
 func (s *AdminService) CreateImage(ctx context.Context, productID int64, in model.AdminImageInput) (*model.Product, error) {
 	if _, err := s.products.GetByID(ctx, productID, true); err != nil {
 		return nil, err
 	}
+	url, err := validateImageURL(derefString(in.URL))
+	if err != nil {
+		return nil, err
+	}
 	img := &model.ProductImage{
 		ProductID: productID,
-		URL:       strings.TrimSpace(in.URL),
-		Alt:       strings.TrimSpace(in.Alt),
-		IsPrimary: in.IsPrimary,
-		SortOrder: in.SortOrder,
+		URL:       url,
+		Alt:       derefString(in.Alt),
+		IsPrimary: in.IsPrimary != nil && *in.IsPrimary,
+		SortOrder: derefInt32(in.SortOrder),
 	}
 	if err := s.products.CreateImage(ctx, img); err != nil {
 		return nil, err
@@ -412,23 +480,64 @@ func (s *AdminService) CreateImage(ctx context.Context, productID int64, in mode
 	return s.products.GetByID(ctx, productID, true)
 }
 
-// UpdateImage rewrites one image and returns its product.
+// UpdateImage patches one gallery image and returns its product.
+//
+// Only the fields the caller sent are written. `isPrimary` matters most: the
+// image manager promotes an image with a one-field click, and treating an
+// absent field as `false` would demote the very image being promoted.
 func (s *AdminService) UpdateImage(ctx context.Context, id int64, in model.AdminImageInput) (*model.Product, error) {
 	img, err := s.products.FindImage(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	img.URL = strings.TrimSpace(in.URL)
-	img.Alt = strings.TrimSpace(in.Alt)
-	img.IsPrimary = in.IsPrimary
-	img.SortOrder = in.SortOrder
+	if in.URL != nil {
+		url, err := validateImageURL(*in.URL)
+		if err != nil {
+			return nil, err
+		}
+		img.URL = url
+	}
 	if img.URL == "" {
 		return nil, badInput("نشانی تصویر را وارد کنید.")
+	}
+	if in.Alt != nil {
+		img.Alt = strings.TrimSpace(*in.Alt)
+	}
+	if in.IsPrimary != nil {
+		img.IsPrimary = *in.IsPrimary
+	}
+	if in.SortOrder != nil {
+		img.SortOrder = *in.SortOrder
 	}
 	if _, err := s.products.UpdateImage(ctx, img); err != nil {
 		return nil, err
 	}
 	return s.products.GetByID(ctx, img.ProductID, true)
+}
+
+// validateImageURL accepts the two shapes a gallery image may legitimately have:
+// an absolute http(s) address, or a path rooted at the site ("/products/x.webp",
+// which is how the seeded catalogue and the frontend's public directory are
+// addressed). The validator tag cannot express this — it rejects the relative
+// form outright — so an image that is already stored could never be re-saved.
+func validateImageURL(raw string) (string, error) {
+	u := strings.TrimSpace(raw)
+	if u == "" {
+		return "", badInput("نشانی تصویر را وارد کنید.")
+	}
+	if strings.HasPrefix(u, "/") {
+		// Reject protocol-relative ("//evil.example/x.png"), which a browser
+		// would otherwise resolve to another host.
+		if strings.HasPrefix(u, "//") {
+			return "", badInput("نشانی تصویر معتبر نیست.")
+		}
+		return u, nil
+	}
+	parsed, err := url.Parse(u)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", badInput("نشانی تصویر باید با http:// یا https:// شروع شود یا یک مسیر داخلی مانند /products/… باشد.")
+	}
+	return u, nil
 }
 
 // DeleteImage removes one image.
@@ -672,6 +781,15 @@ func (s *AdminService) UpdateCoupon(ctx context.Context, id int64, in model.Admi
 	} else if in.ExpiresAt != nil {
 		next.ExpiresAt = in.ExpiresAt
 	}
+	// The "cap already reached" rule belongs to changing the cap, not to every
+	// edit. Checking it unconditionally made a fully redeemed code impossible to
+	// even deactivate or rename — the panel refused everything but raising the
+	// limit.
+	if in.MaxUses != nil && *in.MaxUses > 0 && int32(*in.MaxUses) < cur.UsedCount {
+		return nil, badInput(
+			"سقف استفاده را نمی‌توان کمتر از تعداد استفاده‌شده (" +
+				model.PersianDigits(int64(cur.UsedCount)) + ") کرد.")
+	}
 	if err := validateCoupon(&next); err != nil {
 		return nil, err
 	}
@@ -699,9 +817,6 @@ func validateCoupon(c *model.Coupon) error {
 	}
 	if c.MinOrder < 0 || c.MaxUses < 0 {
 		return badInput("حداقل خرید و سقف استفاده نمی‌توانند منفی باشند.")
-	}
-	if c.MaxUses > 0 && c.UsedCount >= c.MaxUses {
-		return badInput("سقف استفاده این کد پر شده است؛ آن را افزایش دهید.")
 	}
 	return nil
 }

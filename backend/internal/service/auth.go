@@ -141,7 +141,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*model.Us
 		return nil, TokenPair{}, err // ErrConflict bubbles up
 	}
 
-	pair, err := s.tokens.Generate(user.ID, user.Role)
+	pair, err := s.tokens.Generate(user.ID, user.Role, user.TokenVersion)
 	if err != nil {
 		return nil, TokenPair{}, err
 	}
@@ -150,33 +150,50 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*model.Us
 
 // Login verifies credentials and returns the user with a token pair.
 //
-// A missing account and a wrong password return the same error so the endpoint
-// cannot be used to enumerate registered emails.
+// A missing account, a wrong password and a deactivated account all answer with
+// the same error. The bcrypt comparison runs even when the account does not
+// exist (against a dummy hash), so the response time does not reveal which
+// emails are registered either.
 func (s *AuthService) Login(ctx context.Context, email, password string) (*model.User, TokenPair, error) {
 	user, err := s.users.GetByEmail(ctx, normalizeEmail(email))
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
+			// Burn the same amount of time as a real comparison.
+			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 			return nil, TokenPair{}, model.ErrInvalidCredential
 		}
 		return nil, TokenPair{}, err
 	}
 
-	if !user.IsActive {
-		return nil, TokenPair{}, model.ErrForbidden
-	}
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
 		return nil, TokenPair{}, model.ErrInvalidCredential
 	}
+	// Only reveal the deactivation to someone who has already proved they know
+	// the password; otherwise the endpoint enumerates disabled accounts.
+	if !user.IsActive {
+		return nil, TokenPair{}, &model.UserFacingError{
+			Err:  model.ErrForbidden,
+			Text: "این حساب غیرفعال شده است. برای بازیابی با پشتیبانی تماس بگیرید.",
+		}
+	}
 
-	pair, err := s.tokens.Generate(user.ID, user.Role)
+	pair, err := s.tokens.Generate(user.ID, user.Role, user.TokenVersion)
 	if err != nil {
 		return nil, TokenPair{}, err
 	}
 	return user, pair, nil
 }
 
+// dummyHash is a real bcrypt hash of a random value. Comparing against it keeps
+// the "no such account" path as slow as the "wrong password" path.
+var dummyHash = []byte("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
+
 // Refresh exchanges a valid refresh token for a new pair, re-reading the user so
-// role changes and deactivations take effect.
+// role changes, deactivations and revocations take effect.
+//
+// The presented token is retired as part of the exchange (the version it carries
+// no longer matches), so a stolen refresh token cannot be replayed after the
+// legitimate client has used it once.
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*model.User, TokenPair, error) {
 	claims, err := s.tokens.Parse(refreshToken, TokenRefresh)
 	if err != nil {
@@ -190,15 +207,32 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*model.
 	if !user.IsActive {
 		return nil, TokenPair{}, model.ErrForbidden
 	}
+	if claims.Version != user.TokenVersion {
+		return nil, TokenPair{}, model.ErrUnauthorized
+	}
 
-	pair, err := s.tokens.Generate(user.ID, user.Role)
+	// Rotate: the pair about to be issued carries the next version, which
+	// invalidates the token that was just presented.
+	if err := s.users.BumpTokenVersion(ctx, user.ID); err != nil {
+		return nil, TokenPair{}, err
+	}
+	user.TokenVersion++
+
+	pair, err := s.tokens.Generate(user.ID, user.Role, user.TokenVersion)
 	if err != nil {
 		return nil, TokenPair{}, err
 	}
 	return user, pair, nil
 }
 
-// ChangePassword verifies the current password before replacing it.
+// Logout revokes every token the account currently holds.
+func (s *AuthService) Logout(ctx context.Context, userID int64) error {
+	return s.users.BumpTokenVersion(ctx, userID)
+}
+
+// ChangePassword verifies the current password before replacing it. The
+// repository bumps the token version in the same statement, so every other
+// session is signed out.
 func (s *AuthService) ChangePassword(ctx context.Context, userID int64, current, next string) error {
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
@@ -206,6 +240,12 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, current,
 	}
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(current)) != nil {
 		return model.ErrInvalidCredential
+	}
+	if current == next {
+		return &model.UserFacingError{
+			Err:  model.ErrValidation,
+			Text: "رمز عبور تازه باید با رمز فعلی متفاوت باشد.",
+		}
 	}
 	hash, err := hashPassword(next)
 	if err != nil {
@@ -290,6 +330,11 @@ func codeError(err error) error {
 		return &model.UserFacingError{
 			Err:  model.ErrInvalidCode,
 			Text: "کد تأیید نادرست یا منقضی شده است. اگر کد را دریافت نکرده‌اید، دوباره درخواست کنید.",
+		}
+	case errors.Is(err, model.ErrTooManyRequests):
+		return &model.UserFacingError{
+			Err:  model.ErrTooManyRequests,
+			Text: "تعداد تلاش‌های ناموفق برای این شماره بیش از حد مجاز است. لطفاً یک ساعت بعد دوباره تلاش کنید.",
 		}
 	default:
 		return err

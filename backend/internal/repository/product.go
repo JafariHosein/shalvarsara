@@ -71,7 +71,7 @@ func buildProductFilter(f model.ProductFilter) (string, []any, string) {
 		conds = append(conds, "p.is_active = "+ph(*f.IsActive))
 	}
 	if f.Query != "" {
-		conds = append(conds, "p.title ILIKE '%' || "+ph(f.Query)+" || '%'")
+		conds = append(conds, "p.title ILIKE "+ph(likePattern(f.Query))+` ESCAPE '\'`)
 	}
 	if f.CategoryID != nil {
 		conds = append(conds, "p.category_id = "+ph(*f.CategoryID))
@@ -254,11 +254,11 @@ func (r *ProductRepository) Suggest(ctx context.Context, query string, limit int
 		       (SELECT url FROM product_images i WHERE i.product_id = p.id
 		        ORDER BY i.is_primary DESC, i.sort_order LIMIT 1) AS image
 		FROM products p
-		WHERE p.is_active AND p.deleted_at IS NULL AND p.title ILIKE '%' || $1 || '%'
-		ORDER BY similarity(p.title, $1) DESC, p.sold_count DESC
-		LIMIT $2`
+		WHERE p.is_active AND p.deleted_at IS NULL AND p.title ILIKE $1 ESCAPE '\'
+		ORDER BY similarity(p.title, $2) DESC, p.sold_count DESC
+		LIMIT $3`
 
-	rows, err := r.db.Query(ctx, q, query, limit)
+	rows, err := r.db.Query(ctx, q, likePattern(query), query, limit)
 	if err != nil {
 		return nil, err
 	}

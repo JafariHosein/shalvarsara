@@ -2,15 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 
 import { orderService } from "@/services/orders";
 
-/** The server's priced view of the current cart, for the checkout page. */
-export function useOrderPreview(couponCode?: string) {
+/**
+ * The server's priced view of the current cart.
+ *
+ * `enabled` lets the cart page skip the request for a guest, whose cart only
+ * exists in the browser and who would get a 401.
+ */
+export function useOrderPreview(couponCode?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["orders", "preview", couponCode ?? ""],
-    queryFn: () => orderService.preview(couponCode),
+    queryFn: ({ signal }) => orderService.preview(couponCode, signal),
     // Prices and stock move while the customer shops, so never serve a stale
     // total; a preview is one cheap request.
     staleTime: 0,
     retry: false,
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -29,13 +29,23 @@ type Config struct {
 	RunMigrations bool
 	SeedOnStart   bool
 
+	// OrderExpiry is how long an unpaid order keeps its reserved stock before
+	// the background sweeper cancels it. Zero disables the sweeper.
+	OrderExpiry time.Duration
+
 	// Hosting dashboards, CDNs and load balancers terminate TLS on their own
 	// proxy, so the socket peer is the proxy, not the visitor. Without this the
 	// rate limiter would count every visitor as one client. ProxyHeader names
 	// the header carrying the real address; reverse proxies append
 	// X-Forwarded-For by default.
+	//
+	// TrustedProxies is what makes that header trustworthy. Fiber reads the
+	// header only when the immediate peer is in this list; otherwise it falls
+	// back to the socket address. Without it the header is attacker-controlled
+	// and a fresh value per request would hand out a fresh rate-limit bucket.
 	TrustProxyHeader bool
 	ProxyHeader      string
+	TrustedProxies   []string
 }
 
 // JWTConfig holds token signing material and lifetimes.
@@ -141,8 +151,11 @@ func Load() (*Config, error) {
 		},
 
 		Admin: AdminConfig{
-			Name:     getEnv("ADMIN_NAME", "مدیر فروشگاه"),
-			Email:    getEnv("ADMIN_EMAIL", "admin@example.com"),
+			Name:  getEnv("ADMIN_NAME", "مدیر فروشگاه"),
+			Email: getEnv("ADMIN_EMAIL", "admin@example.com"),
+			// No default password: see seeder.seedUsers. An empty value means
+			// "do not create an admin account" in development and a startup
+			// error when SEED_ON_START is on in production.
 			Password: getEnv("ADMIN_PASSWORD", ""),
 		},
 
@@ -152,18 +165,29 @@ func Load() (*Config, error) {
 		},
 
 		SMS: SMSConfig{
-			TestMode:    getBool("SMS_TEST_MODE", true),
+			// Fail closed: returning the verification code in the API response
+			// is a development convenience, so an unset variable must not turn
+			// it on for a deployment that never thought about it.
+			TestMode:    getBool("SMS_TEST_MODE", false),
 			CodeTTL:     getDuration("SMS_CODE_TTL", 2*time.Minute),
 			ResendAfter: getDuration("SMS_RESEND_AFTER", 60*time.Second),
 		},
 
 		RunMigrations: getBool("RUN_MIGRATIONS", true),
 		SeedOnStart:   getBool("SEED_ON_START", false),
+		// 30 minutes is long enough for a real checkout and short enough that an
+		// abandoned basket does not hold the last unit of a SKU for a day.
+		OrderExpiry: getDuration("ORDER_EXPIRY", 30*time.Minute),
 
 		// Off locally (nothing sits in front of the API), on behind a host's
 		// proxy. PROXY_HEADER only matters when TRUST_PROXY_HEADER is true.
 		TrustProxyHeader: getBool("TRUST_PROXY_HEADER", false),
 		ProxyHeader:      getEnv("PROXY_HEADER", "X-Forwarded-For"),
+		// Loopback and the private ranges cover the usual arrangements (a
+		// reverse proxy on the same host, docker compose, a VPC-internal load
+		// balancer). A platform with public proxy addresses must list them.
+		TrustedProxies: splitAndTrim(getEnv("TRUSTED_PROXIES",
+			"127.0.0.1/8,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -185,16 +209,67 @@ func (c *Config) validate() error {
 	if c.JWT.AccessSecret == c.JWT.RefreshSecret {
 		return fmt.Errorf("config: JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must differ")
 	}
-	// In production, weak secrets are a real vulnerability, not a warning.
-	if c.IsProduction() {
-		if len(c.JWT.AccessSecret) < 32 || len(c.JWT.RefreshSecret) < 32 {
-			return fmt.Errorf("config: JWT secrets must be at least 32 characters in production")
+	// The length rule is not gated on APP_ENV any more: APP_ENV defaults to
+	// "development", so a production host that forgot to set it would otherwise
+	// accept a one-character signing key while serving real traffic.
+	if len(c.JWT.AccessSecret) < 32 || len(c.JWT.RefreshSecret) < 32 {
+		return fmt.Errorf("config: JWT secrets must be at least 32 characters")
+	}
+	// A copied template is not a secret. These values are published in the
+	// repository, so accepting them would mean anyone could mint an admin token.
+	for name, value := range map[string]string{
+		"JWT_ACCESS_SECRET":  c.JWT.AccessSecret,
+		"JWT_REFRESH_SECRET": c.JWT.RefreshSecret,
+	} {
+		if isTemplateSecret(value) {
+			return fmt.Errorf("config: %s still holds the example value from .env.example", name)
 		}
+	}
+	// Trusting a forwarded header without pinning who may send it is worse than
+	// not trusting it: the rate limiter would key on a value the client picks.
+	if c.TrustProxyHeader && len(c.TrustedProxies) == 0 {
+		return fmt.Errorf("config: TRUST_PROXY_HEADER is on but TRUSTED_PROXIES is empty")
+	}
+	if c.IsProduction() {
 		if c.ZarinPal.MerchantID == "" {
 			return fmt.Errorf("config: ZARINPAL_MERCHANT_ID is required in production")
 		}
+		// Live gateway plus a placeholder merchant id means every payment fails
+		// at the gateway, which customers discover before the shop does.
+		if !c.ZarinPal.Sandbox && isPlaceholder(c.ZarinPal.MerchantID) {
+			return fmt.Errorf("config: ZARINPAL_MERCHANT_ID is still a placeholder value")
+		}
+		// Handing the verification code back in the response defeats the whole
+		// point of verifying the number.
+		if c.SMS.TestMode {
+			return fmt.Errorf("config: SMS_TEST_MODE must be false in production")
+		}
 	}
 	return nil
+}
+
+// isTemplateSecret reports whether a value is one of the published examples
+// rather than a real secret.
+func isTemplateSecret(value string) bool {
+	v := strings.ToLower(value)
+	for _, marker := range []string{"change-me", "changeme", "change_me", "dev-access", "dev-refresh", "please", "example", "placeholder", "your-secret"} {
+		if strings.Contains(v, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPlaceholder reports whether a configured value is obviously not real.
+func isPlaceholder(value string) bool {
+	v := strings.ToUpper(strings.TrimSpace(value))
+	if v == "" {
+		return true
+	}
+	if strings.Contains(v, "XXXX") || strings.Contains(v, "YYYY") {
+		return true
+	}
+	return strings.Trim(v, "-0") == ""
 }
 
 // ---- env helpers ----------------------------------------------------------

@@ -84,9 +84,41 @@ func (r *ProductRepository) SoftDelete(ctx context.Context, id int64) error {
 
 // ---------- variants ----------
 
-// CreateVariant adds one size/colour combination.
+// syncProductStockTx recomputes a product's aggregate stock from its variants.
+//
+// products.stock is what the storefront's `inStock` filter, the product card
+// badge and cart clamping read when no variant is chosen, so it has to follow
+// every variant write. Checkout already keeps both rows in step; the admin
+// writes below did not, which left a product restocked through its variants
+// still listed as sold out (and vice versa).
+func syncProductStockTx(ctx context.Context, tx pgx.Tx, productID int64) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE products
+		SET stock = COALESCE((SELECT SUM(stock) FROM product_variants WHERE product_id = $1), 0)
+		WHERE id = $1`, productID)
+	return err
+}
+
+// SyncProductStock recomputes the aggregate outside a transaction, for callers
+// that removed a variant row directly.
+func (r *ProductRepository) SyncProductStock(ctx context.Context, productID int64) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE products
+		SET stock = COALESCE((SELECT SUM(stock) FROM product_variants WHERE product_id = $1), 0)
+		WHERE id = $1`, productID)
+	return err
+}
+
+// CreateVariant adds one size/colour combination and refreshes the product's
+// aggregate stock in the same transaction.
 func (r *ProductRepository) CreateVariant(ctx context.Context, v *model.ProductVariant) error {
-	err := r.db.QueryRow(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	err = tx.QueryRow(ctx, `
 		INSERT INTO product_variants (product_id, size, color, color_hex, stock, sku, extra_price)
 		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7)
 		RETURNING id`,
@@ -95,12 +127,25 @@ func (r *ProductRepository) CreateVariant(ctx context.Context, v *model.ProductV
 	if isUniqueViolation(err) {
 		return model.ErrConflict
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if err := syncProductStockTx(ctx, tx, v.ProductID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-// UpdateVariant rewrites one variant and returns the stored row.
+// UpdateVariant rewrites one variant and refreshes the product's aggregate
+// stock in the same transaction.
 func (r *ProductRepository) UpdateVariant(ctx context.Context, v *model.ProductVariant) (*model.ProductVariant, error) {
-	err := r.db.QueryRow(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	err = tx.QueryRow(ctx, `
 		UPDATE product_variants SET
 			size = $2, color = $3, color_hex = $4, stock = $5,
 			sku = NULLIF($6, ''), extra_price = $7
@@ -111,7 +156,16 @@ func (r *ProductRepository) UpdateVariant(ctx context.Context, v *model.ProductV
 	if isUniqueViolation(err) {
 		return nil, model.ErrConflict
 	}
-	return v, err
+	if err != nil {
+		return nil, err
+	}
+	if err := syncProductStockTx(ctx, tx, v.ProductID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // DeleteVariant removes one variant. Order lines keep their snapshot; the

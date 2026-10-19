@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -39,9 +40,11 @@ func buildAdminOrderFilter(f model.AdminOrderFilter) (string, []any) {
 		conds = append(conds, "o.status = $"+strconv.Itoa(len(args))+"::order_status")
 	}
 	if q := strings.TrimSpace(f.Query); q != "" {
-		args = append(args, "%"+q+"%")
+		args = append(args, likePattern(q))
 		ph := "$" + strconv.Itoa(len(args))
-		conds = append(conds, "(o.code ILIKE "+ph+" OR o.ship_phone ILIKE "+ph+" OR o.ship_receiver_name ILIKE "+ph+")")
+		conds = append(conds, "(o.code ILIKE "+ph+` ESCAPE '\'`+
+			" OR o.ship_phone ILIKE "+ph+` ESCAPE '\'`+
+			" OR o.ship_receiver_name ILIKE "+ph+` ESCAPE '\'`+")")
 	}
 	return "WHERE " + strings.Join(conds, " AND "), args
 }
@@ -135,6 +138,12 @@ func (r *OrderRepository) TransitionStatus(ctx context.Context, id int64, to str
 	}
 
 	if to == model.OrderCanceled {
+		var couponID *int64
+		if err := tx.QueryRow(ctx,
+			`SELECT coupon_id FROM orders WHERE id = $1`, id).Scan(&couponID); err != nil {
+			return nil, err
+		}
+
 		rows, err := tx.Query(ctx, `
 			SELECT product_id, variant_id, quantity FROM order_items
 			WHERE order_id = $1 ORDER BY product_id, variant_id`, id)
@@ -160,6 +169,19 @@ func (r *OrderRepository) TransitionStatus(ctx context.Context, id int64, to str
 		}
 		if err := restoreStock(ctx, tx, items); err != nil {
 			return nil, err
+		}
+		// Return the coupon use too: it was consumed when the order row was
+		// written, before any money moved, so an abandoned checkout would
+		// otherwise burn a redemption of a limited code for good. The cancel
+		// branch runs at most once per order (it is serialized on the order row
+		// above and CanTransition refuses to leave 'canceled'), so this cannot
+		// give back more uses than were taken.
+		if couponID != nil {
+			if _, err := tx.Exec(ctx,
+				`UPDATE coupons SET used_count = GREATEST(used_count - 1, 0) WHERE id = $1`,
+				*couponID); err != nil {
+				return nil, err
+			}
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return nil, err
@@ -278,6 +300,55 @@ func (r *OrderRepository) UpsertShipment(ctx context.Context, id int64, in model
 		return nil, err
 	}
 	return r.GetByIDUnscoped(ctx, id)
+}
+
+// ExpirePendingOrders cancels orders that were created but never paid for
+// within the cutoff, returning their reserved stock (and coupon use) to the
+// pool.
+//
+// Checkout reserves stock the moment the order row is written, and the only
+// other path that gives it back is an admin cancelling by hand. Without this
+// sweep an account could park the last unit of every SKU in unpaid orders
+// forever, at no cost, while real customers saw "out of stock".
+//
+// It runs through TransitionStatus so the stock and coupon bookkeeping is
+// exactly the same as a manual cancellation, and it is safe to run repeatedly
+// and concurrently: the transition is serialized on the order row and
+// CanTransition refuses to leave 'canceled'.
+func (r *OrderRepository) ExpirePendingOrders(ctx context.Context, olderThan time.Duration, limit int) (int, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id FROM orders
+		WHERE status = 'pending' AND created_at < now() - make_interval(secs => $1)
+		ORDER BY created_at
+		LIMIT $2`, int(olderThan.Seconds()), limit)
+	if err != nil {
+		return 0, err
+	}
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	expired := 0
+	for _, id := range ids {
+		// A payment that landed between the SELECT and here makes this fail the
+		// transition check, which is the correct outcome: leave it alone.
+		if _, err := r.TransitionStatus(ctx, id, model.OrderCanceled); err != nil {
+			continue
+		}
+		expired++
+	}
+	return expired, nil
 }
 
 // statusFa is the label the admin sees for an order status.

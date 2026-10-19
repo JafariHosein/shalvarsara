@@ -2,22 +2,194 @@
 
 > یادداشت کاری پروژه. **پیش از هر کار این فایل را بخوان.**
 >
-> آخرین به‌روزرسانی: **۲۴ مهر ۱۴۰۵**
+> آخرین به‌روزرسانی: **۲۷ مهر ۱۴۰۵** — **بازبینی کامل و رفع باگ (فاز ۷)**
 > فازهای ۱ تا ۵ و سه بستهٔ درخواست کارفرما انجام و در مرورگر تأیید شده‌اند
-> (تاریخچهٔ کامل در گیت). بک‌اند و فرانت‌اند پاک‌اند (`build`/`vet`/`gofmt`/`typecheck`).
-> شاخهٔ `main` با `origin` هم‌تراز و درخت کار پاک است.
+> (تاریخچهٔ کامل در گیت). یک پاس کامل روی بک‌اند/دیتابیس/فرانت انجام شد:
+> باگ‌های منطقی، امنیتی و UI رفع شدند، مهاجرت `000005_integrity_hardening`
+> ساخته و اعمال شد، و زیرساخت تست اضافه شد.
+> **وضعیت سبز:** `go build` / `go vet` / `gofmt` / `go test` (۱۹ فایل تست،
+> ۹۴ تست) و `npm run typecheck` / `npm run test` (۲۲۵ تست، ۱۲ فایل) /
+> `npm run build` — همه exit 0. CI در `.github/workflows/ci.yml`.
 > **فاز بعدی: فاز ۶ — آپلود تصویر.** نقشهٔ کار و تصمیم‌های باز در بخش ۱.
 >
 > پروژه: فروشگاه اینترنتی **فقط شلوار**، فارسی و RTL، تم سفید/آبی + دارک.
-> فرانت: React 18 + Vite 5 + TS + Tailwind 3.4 + shadcn/ui. بک: Go 1.27 + Fiber v2
+> فرانت: React 18 + Vite 5 + TS + Tailwind 3.4 + shadcn/ui. بک: Go 1.23 + Fiber v2
 > + PostgreSQL 16 + JWT. پول همه‌جا **عدد صحیح تومان** است؛ تبدیل به ریال **فقط** در
 > یک ثابت (`rialPerToman` در `internal/service/payment.go`) و هیچ‌جای دیگر.
+
+---
+
+## ۰) نتیجهٔ بازبینی کامل (فاز ۷) — چه چیزی عوض شد
+
+بخش‌های ۱ و ۲ پایین‌تر دست‌نخورده مانده‌اند (کارهای آینده و تله‌های محیط). این
+فهرست، کارهای **انجام‌شدهٔ** همین پاس است. هر مورد با تست یا بررسی روی سرور
+زنده تأیید شده است.
+
+### بحرانی
+
+1. **دو بار پرداخت/دو بار ثبت سفارش (race).**
+   `PaymentRepository.Complete` حالا به‌روزرسانی سفارش را با
+   `WHERE id = $1 AND status = 'pending'` گارد می‌کند و اگر صفر ردیف عوض شد
+   `model.ErrConflict` می‌دهد؛ `PaymentService.Callback` آن را می‌گیرد، تلاش را
+   «ناموفق» علامت می‌زند و پیام فارسی «قابل پرداخت نیست / تا ۷۲ ساعت بازگشت»
+   می‌دهد و `Paid` را ست **نمی‌کند**. پیش‌تر دو کال‌بک هم‌زمان می‌توانستند هر دو
+   موفق شوند.
+2. **سبد خالی ≠ سفارش تکراری.** `OrderRepository.CreateFromCart` حالا
+   `tag.RowsAffected()` حذف سبد را چک می‌کند و در صفر `model.ErrEmptyCart`
+   برمی‌گرداند. این همان گاردی است که کلیک دوباره روی «پرداخت» را بی‌خطر می‌کند.
+3. **اعتبارسنجی پروکسی/نرخ.** `router.go` با
+   `EnableTrustedProxyCheck` + `TrustedProxies` + `EnableIPValidation` بالا
+   می‌آید و محدودکنندهٔ نرخ دو لایه شد: سطل بر اساس IP (۲۰/دقیقه) و سطل بر
+   اساس هویت هش‌شده (۱۰/دقیقه). هدر `X-Forwarded-For` وقتی
+   `TRUST_PROXY_HEADER=false` است خوانده **نمی‌شود**، پس با جعل هدر نمی‌شود
+   سطل تازه گرفت.
+4. **رازهای JWT قالبی روی بوت رد می‌شوند.** `config.validate()` هر دو راز را
+   ≥۳۲ کاراکتر می‌خواهد و مقادیر `change-me`/`example`/`please` را رد می‌کند.
+   در production همچنین `ZARINPAL_MERCHANT_ID` غیرنمونه و
+   `SMS_TEST_MODE=false` الزامی است. `backend/.env` محلی با
+   `scripts/gen-secrets.ps1` ساخته شد.
+
+### امنیت
+
+5. **شمارش کاربران در ورود بسته شد.** `Login` اول bcrypt را مقایسه می‌کند
+   (در نبود کاربر با یک `dummyHash`) و **بعد** پیام «غیرفعال است» را می‌دهد؛
+   زمان پاسخ دیگر فرق نمی‌کند.
+6. **خروج/تغییر رمز/تغییر نقش، توکن‌های قبلی را باطل می‌کند.**
+   `users.token_version` اضافه شد؛ `Claims` فیلد `ver` دارد؛ `RequireAuth` و
+   `Refresh` ناهم‌خوانی را ۴۰۱ می‌کنند. `Logout` و `ChangePassword` و
+   `UpdateAccess` (نقش/فعال‌بودن) نسخه را بالا می‌برند. refresh هم در هر
+   استفاده **چرخش** می‌کند.
+7. **`ADMIN_PASSWORD` پیش‌فرض ندارد.** seeder دیگر `Admin@12345` را حدس
+   نمی‌زند؛ در production با مقدار خالی خطا می‌دهد و در توسعه هشدار می‌دهد و
+   ادمین نمی‌سازد. `render.yaml` هم به `sync: false` تغییر کرد.
+8. **محدودیت تلاش کد پیامکی واقعی شد.** سقف ۵ تلاش حالا **به ازای
+   `(موبایل، هدف)` در بازهٔ یک‌ساعت** شمرده می‌شود (قبلاً per-row بود و با
+   درخواست کد تازه صفر می‌شد).
+9. **`ILIKE` در همهٔ جستجوها escape می‌شود.** `likePattern()` + `ESCAPE '\'`
+   در `product`/`admin_product`/`admin_user`/`admin_order`/`admin_coupon`/
+   `admin_payment`/`admin_review`. جستجوی `%` دیگر همه‌چیز را برنمی‌گرداند.
+10. **کلیدهای آپلود/تصویر.** `validateImageURL` مسیر ریشه‌دار (`/products/…`)
+    را قبول و `//evil.example` را رد می‌کند (هم بک‌اند هم اسکیمای فرانت).
+11. **`docker-compose.yml` پورت Postgres را به `127.0.0.1` می‌بندد** (قبلاً
+    روی `0.0.0.0` بود و روی Wi‑Fi عمومی در دسترس کل شبکه).
+12. **هدرهای امنیتی nginx در هر location تکرار می‌شوند.** nginx با اولین
+    `add_header` محلی، ارث‌بری را قطع می‌کند؛ پس `nosniff`/`X-Frame-Options`/
+    `Referrer-Policy` در `= /healthz` و `/assets/` و `/` هر سه آمده‌اند.
+
+### داده و منطق
+
+13. **`orders.coupon_code` ذخیره می‌شود.** قبلاً کد کوپن در سفارش نمی‌ماند و
+    فاکتور/رسید بی‌کد بود؛ حالا INSERT آن را می‌نویسد و `orderColumns` با
+    `COALESCE(NULLIF(o.coupon_code,''), c.code, '')` می‌خواند.
+14. **لغو سفارش، مصرف کوپن را برمی‌گرداند.** `admin_order.go` داخل تراکنش
+    `used_count = GREATEST(used_count - 1, 0)` می‌زند.
+15. **سفارش‌های pending منقضی می‌شوند.** `ExpirePendingOrders` +
+    `startOrderExpirySweeper` در `cmd/api/main.go` (هر ۵ دقیقه، پیش‌فرض
+    `ORDER_EXPIRY=30m`، با `0` خاموش). لاگ واقعی:
+    `INF expired unpaid orders orders=1`.
+16. **آمار پنل دیگر pending را درآمد نمی‌شمارد.** `paidStatuses` در
+    `admin_stats.go` و `total_spent` کاربر؛ باکت‌های روزانه هم به
+    `AT TIME ZONE 'Asia/Tehran'` پین شدند.
+17. **`pending → paid` از پنل ممکن نیست.** فقط `PaymentRepository.Complete`
+    می‌تواند `paid` بگذارد (`CanTransition` اصلاح شد) تا ادمین نتواند
+    سفارشی را بدون تراکنش «پرداخت‌شده» کند.
+18. **موجودی محصول با گونه‌ها هم‌گام می‌شود.** `SyncProductStock` در
+    ساخت/ویرایش/حذف گونه داخل تراکنش. تأیید زنده:
+    `product stock=18 sum(variants)=18 -> IN STEP`.
+19. **امتیاز محصول بعد از بازبینی نظر بازمحاسبه می‌شود** و
+    `AdminSetStatus` یک تراکنش شد (قبلاً دو تراکنش جدا).
+20. **`PATCH` ادمین واقعاً جزئی است.** `AdminVariantInput` و
+    `AdminImageInput` به اشاره‌گر تغییر کردند (`*string`/`*int32`/`*bool`)؛
+    هر فیلد `nil` دست‌نخورده می‌ماند. **باگ واقعی که این رفع کرد:** دکمهٔ
+    «اصلی کن» در گالری فقط `isPrimary` را می‌فرستد و بقیهٔ فیلدها صفر
+    می‌شدند (`stock=0` یعنی «ناموجود»). تأیید زنده روی سرور: پچ تک‌فیلدی،
+    همهٔ فیلدهای دیگر را حفظ می‌کند و تعداد تصویر اصلی همیشه ۱ می‌ماند.
+
+### مهاجرت `000005_integrity_hardening`
+
+`orders.coupon_code TEXT NOT NULL DEFAULT ''` (+ backfill)،
+`users.token_version INT NOT NULL DEFAULT 0`، و ۱۲ ایندکس:
+`users_email_lower_uniq`، `coupons_code_upper_uniq`،
+`product_images_one_primary_idx` (UNIQUE جزئی روی `is_primary`)،
+`users_phone_key`، و ایندکس‌های FK روی
+`order_items.product_id`/`cart_items.variant_id`/`wishlists.product_id`/
+`reviews.user_id`/`orders.address_id`/`orders.coupon_id`/`payments.status`/
+`shipments.status`. فایل `.down.sql` آینهٔ دقیق است.
+
+> **مسیر بازگشت تأیید شد** (`scripts/verify-rollback.cmd` روی یک دیتابیس
+> دورریز): `up` → ۵ مهاجرت/۱۷ جدول، `down` → ۴ مهاجرت و `coupon_code` رفت،
+> `up` دوباره → برگشت، `down all` → ۰ مهاجرت. `go run ./cmd/migrate down`
+> حالا آرگومان می‌گیرد (`up` | `down [N|all]`) — `internal/database/migrate.go`
+> تابع `Rollback` گرفت و قفل advisory روی **یک** کانکشن گرفته می‌شود
+> (قبلاً روی pool بود و unlock بی‌اثر می‌شد).
+
+### فرانت‌اند
+
+21. **خروج اجباری در همان تب کار می‌کند.** رویداد `AUTH_CLEARED_EVENT` از
+    `lib/token.ts` می‌آید؛ رویداد `storage` هرگز در همان تب شلیک نمی‌شود، پس
+    قبلاً UI تا رفرش بعدی «وارد» می‌ماند.
+22. **پاک‌سازی کامل کش هنگام خروج.** `resetSession()` حالا
+    `queryClient.clear()` می‌زند؛ قبلاً فقط کلید سبد پاک می‌شد و علاقه‌مندی/
+    سفارش/آدرس کاربر قبلی روی مرورگر مشترک دیده می‌شد.
+23. **چرخهٔ رفرش توکن بی‌پایان نیست.** `api.ts` با
+    `retried: true` + `AbortSignal.timeout(10s)` یک بار تلاش می‌کند و بار دوم
+    ۴۰۱ را بالا می‌دهد.
+24. **صفحهٔ نتیجهٔ پرداخت وضعیت‌های پرداخت‌شده را می‌شناسد.**
+    `isPaidOrderStatus` روی `paid|processing|shipped|delivered`؛ قبلاً فقط
+    `paid` بود و مشتری‌ای که انبار سفارشش را جلو برده بود، پیام «پرداخت انجام
+    نشد» می‌دید.
+25. **کوپن معتبر با یک تلاش ناموفق پاک نمی‌شود.** `applyCoupon.onError` دیگر
+    `setCoupon("")` نمی‌زند — کوپنِ اعمال‌شده سر جایش می‌ماند.
+26. **سفارش بی‌درگاه، مشتری را گم نمی‌کند.** اگر `orders` ساخته شد ولی
+    `payments/request` شکست خورد، به `/account/orders` می‌رود (سبد همان لحظه
+    خالی شده است) و پیام فارسی می‌گیرد.
+27. **`disabled` روی `Button asChild` بی‌اثر بود.** در `cart.tsx` و
+    `checkout.tsx` حالا در حالت غیرفعال یک `<button disabled>` واقعی رندر
+    می‌شود، نه `<Link>`.
+28. **صفحهٔ سبد از قیمت سرور می‌خواند.** با `useOrderPreview` (مبلغ، تخفیف و
+    ارسال سروری)؛ `lib/shipping.ts` فقط برای مهمان فالبک است.
+29. **سبد خطادیده «خالی» نشان داده نمی‌شود.** `useCart` حالا `isError` و
+    `refetch` می‌دهد و صفحهٔ سبد دکمهٔ «تلاش دوباره» دارد.
+30. **rollback خوش‌بینانهٔ سبد، جهش‌های دیگر را خراب نمی‌کند.** فقط مقدار قبلی
+    همان یک قلم برمی‌گردد، نه کل snapshot سبد.
+31. **فرم محصول با هر refetch بازنویسی نمی‌شود.** `seededId` فقط یک‌بار seed
+    می‌کند؛ قبلاً ویرایش‌های ذخیره‌نشدهٔ ادمین با هر تغییر گونه/تصویر پاک
+    می‌شد.
+32. **انتقال سبد مهمان نتیجه‌اش گزارش می‌شود.** تعداد اقلام ناموجودشده
+    («X کالا منتقل نشد») یا هشدار شکست کل انتقال.
+33. **`imageSchema`/`imageUrlSchema` مسیر نسبی را قبول می‌کنند** (قبلاً
+    `.url()` بود و ویرایش هر ۱۸۶ تصویر seed شکست می‌خورد).
+34. **`FormData` در `api.ts` دیگر `{}` نمی‌شود** (`http.upload` اضافه شد،
+    آمادهٔ فاز ۶).
+
+### زیرساخت تست و CI
+
+- **Go:** ۱۹ فایل `*_test.go`، ۹۴ تست سطح‌بالا / ~۵۳۰ زیرتست (`go test ./...`).
+- **فرانت:** Vitest + Testing Library، ۲۲۵ تست در ۱۲ فایل، `jsdom`،
+  `src/test/setup.ts` (شیم `localStorage` برای Node ۲۲+ که بدون
+  `--localstorage-file` مقدار `undefined` می‌دهد).
+- **CI:** `.github/workflows/ci.yml` — سه جاب: `backend`
+  (`go mod tidy` + gofmt + vet + build + `go test -race`)، `frontend`
+  (typecheck + test + build) و `migrations` که مهاجرت‌ها را روی یک
+  PostgreSQL 16 واقعی بالا و **پایین** می‌آورد و نبود/بودن ستون‌ها و ایندکس‌ها
+  را assert می‌کند.
+- **اسکریپت‌های بررسی محلی** (همه در `scripts/`): `check-backend.cmd`،
+  `fmt-backend.cmd`، `check-frontend.cmd`، `check-frontend-full.cmd`،
+  `verify-fixes2.ps1` (API)، `verify-patch.ps1` (PATCH جزئی ادمین)،
+  `verify-rollback.cmd`، `verify-images.cmd`، `start-api2.cmd`،
+  `stop-api.cmd`، `gen-secrets.ps1`.
+
+> ⚠️ **`go test -race` روی این سیستم اجرا نمی‌شود** چون هیچ کامپایلر C نصب
+> نیست (`CGO_ENABLED=0` و `gcc`/`clang`/`cl` هیچ‌کدام نیستند). در CI (اوبونتو)
+> با `-race` اجرا می‌شود. برای اجرای محلی: یک mingw-w64 نصب کن و
+> `CGO_ENABLED=1 go test -race ./...`.
 
 ---
 
 ## ۱) کارهای باقی‌مانده
 
 ### فاز ۶ — آپلود تصویر (فاز بعدی) — نقشهٔ آماده، **شروع‌نشده**
+
 
 **وضعیت فعلی (بررسی‌شده):** هیچ کد آپلود، هیچ روت استاتیک، هیچ کتابخانهٔ تصویری و
 هیچ کلید کانفیگی وجود ندارد — کار از صفر است.
@@ -75,11 +247,20 @@ UNIQUE و هیچ قید «تک‌primary» ندارد (`migrations/000001_init.u
 
 ### فاز ۷ — کیفیت و امنیت
 
-- [ ] تست‌های Go: واحد برای `service`، یکپارچه برای `repository`.
-- [ ] Vitest + Testing Library برای کامپوننت‌های کلیدی.
-- [ ] CI (GitHub Actions): `go vet`, `go test`, `npm run build`.
+- [x] تست‌های Go: واحد برای `model`/`config`/`service`/`httpx`/`zarinpal` و
+      `repository` (هلپرهای خالص) + `handler` (اعتبارسنجی ورودی‌های ادمین) +
+      `cmd/migrate`. **باقی‌مانده:** تست **یکپارچه** برای `repository` با
+      دیتابیس واقعی (نیاز به testcontainers یا یک DATABASE_URL تست).
+- [x] Vitest + Testing Library برای کامپوننت‌ها و لایهٔ lib.
+- [x] CI (GitHub Actions): gofmt + vet + build + `go test -race`،
+      typecheck + test + build، و اعمال/بازگشت مهاجرت‌ها روی Postgres ۱۶.
 - [ ] مهاجرت refresh token از `localStorage` به کوکی httpOnly + محافظت CSRF.
-- [ ] هدرهای امنیتی (CSP، HSTS) و محدودیت نرخ روی مسیرهای عمومی.
+      (بخشی از ریسک کم شد: refresh حالا در هر استفاده می‌چرخد و
+      `token_version` توکن‌های قدیمی را باطل می‌کند.)
+- [x] محدودیت نرخ روی مسیرهای عمومی/اعتباری (دو سطل: IP + هویت).
+- [ ] هدرهای امنیتی **کامل**: CSP و HSTS هنوز نه. `nginx.conf` فقط
+      `nosniff`/`X-Frame-Options`/`Referrer-Policy`/`X-XSS-Protection` دارد.
+      CSP نیاز به مرور دارد چون نقشهٔ OSM و فونت‌ها منابع خارجی‌اند.
 
 ### پیش‌نمایش مشتری از داخل ایران — **CDN آروان روی Render** (راهنمای گام‌به‌گام: `DEPLOY-ARVAN.md`)
 
@@ -222,11 +403,10 @@ CDN رایگان آروان به پاپ‌های ایران می‌آید. دا�
 19. **جدول نظرات پنل `table-fixed` است و ستون‌ها را تدریجی مخفی می‌کند** —
     تاریخ زیر `xl`، مشتری زیر `md`، محصول و وضعیت زیر `sm` (هر کدام همراه با
     هدِر خودش). عمدی است تا کادر اسکرول افقی نخورد؛ باگ نیست.
-20. **ویرایش عکس موجودِ محصول در پنل امروز شکست می‌خورد** (باگ نهفته، طبق بررسی
-    کد): ردیف‌های seed نشانی **نسبی** دارند (`/products/…`) ولی اعتبارسنجی
-    بک‌اند `AdminImageInput.URL` تگ `required,url` دارد (`model/admin.go:41`) و
-    اسکیمای فرانت هم `.url()` است (`lib/schemas.ts:149`) ⇒ ذخیرهٔ بدون تغییر URL
-    خطای اعتبارسنجی می‌دهد. فاز ۶ همین را باید حل کند (پذیرش مسیر نسبی).
+20. ~~**ویرایش عکس موجودِ محصول در پنل امروز شکست می‌خورد**~~ — **رفع شد.**
+    تگ `required,url` حذف شد و جایش `validateImageURL` آمد که مسیر ریشه‌دار را
+    هم قبول می‌کند؛ اسکیمای فرانت هم `imageUrlSchema` شد. تأیید زنده:
+    ذخیرهٔ مجدد `/products/cargo-navy-a-2.webp` → ۲۰۰، `//evil.example` → ۴۲۲.
 
 21. 🔴 **تبرهای آروان+Render در دامنهٔ اختصاصی: دامنه را در Render اضافه کن *قبل از*
     روشن کردن ابر آروان.** اگر ابر آروان روشن باشد و گواهی آن دامنه در Render صادر
@@ -239,6 +419,19 @@ CDN رایگان آروان به پاپ‌های ایران می‌آید. دا�
     (`000` = گواهی نیست، `200`/`301` = گواهی روی لبهٔ Render سرو می‌شود.)
     **راه‌حل:** ابر همان رکورد را خاموش کن → در Render دامنه را اضافه/تأیید کن و صبر
     کن Verified + گواهی صادر شود → بعد ابر را روشن کن.
+
+22. **رمز مدیر در `render.yaml` دیگر نیست.** به `sync: false` تغییر کرد؛ رمز را
+    باید در پنل Render (Environment) وارد کنی. اگر خالی بماند، API در production
+    بالا می‌آید ولی **حساب ادمین ساخته نمی‌شود** و seeder هشدار می‌دهد
+    (این عمدی است: پیش‌تر یک رمز نمونهٔ منتشرشده روی پنل زنده بود).
+
+23. **`SMS_TEST_MODE` پیش‌فرضش `false` شد.** برای ثبت‌نام محلی باید در
+    `backend/.env` آن را `true` بگذاری (همین حالا ست است). در production با
+    `true` سرور بالا نمی‌آید.
+
+24. **`docker compose up` بدون فایل `.env` هم کار می‌کند.** هر دو سرویس
+    `env_file` را `required: false` گرفتند و پیش‌فرض‌های داخل compose کافی‌اند.
+    پورت Postgres هم به `127.0.0.1` بسته شد.
 
 ### تله‌هایی که در کد دوباره گاز می‌گیرند
 
@@ -290,9 +483,21 @@ cd backend;  go run ./cmd/api         # → http://127.0.0.1:8080
 cd frontend; cmd /c "npm run dev"     # → http://localhost:5173
 
 # بررسی‌ها
-cd backend;  go build ./... ; go vet ./...
+cd backend;  go build ./... ; go vet ./... ; go test ./...
 cd frontend; cmd /c "npm run build"    # tsc --noEmit + vite build
 cd frontend; cmd /c "npm run typecheck"
+cd frontend; cmd /c "npm run test"     # ۲۲۵ تست، ۱۲ فایل
+
+# اسکریپت‌های آماده (خروجی در %TEMP%)
+cmd /c "scripts\check-backend.cmd"        # build + vet + gofmt + test → check.txt
+cmd /c "scripts\fmt-backend.cmd"          # gofmt -w → fmt.txt
+cmd /c "scripts\check-frontend-full.cmd"  # test + build → fetest.txt
+cmd /c "scripts\start-api2.cmd"           # API جدا (minimized) → apirun2.txt
+cmd /c "scripts\stop-api.cmd"             # هر چه روی 8080 است را می‌کشد
+powershell -ExecutionPolicy Bypass -File scripts\verify-patch.ps1       # PATCH جزئی ادمین
+powershell -ExecutionPolicy Bypass -File scripts\verify-fixes2.ps1      # اعتبارسنجی/فیلتر/موجودی
+cmd /c "scripts\verify-rollback.cmd"      # up/down مهاجرت‌ها روی دیتابیس دورریز
+cmd /c "scripts\verify-images.cmd"        # یکتایی تصویر اصلی + شکل URLها
 ```
 
 > `make` روی این سیستم نصب نیست؛ اهداف Makefile معادل دستورهای بالا هستند.
@@ -319,11 +524,13 @@ DSN          : postgres://shalvarsara:shalvarsara@localhost:5432/shalvarsara?ssl
 | `CORS_ORIGINS` | `http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173` |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `720h` |
 | `RUN_MIGRATIONS` / `SEED_ON_START` | `true` / `false` |
-| `TRUST_PROXY_HEADER` / `PROXY_HEADER` | `false` / `X-Forwarded-For` — محلی **خاموش** بماند تا هدر قابل جعل نباشد؛ روی Render/پشت CDN `true` |
+| `TRUST_PROXY_HEADER` / `PROXY_HEADER` / `TRUSTED_PROXIES` | `false` / `X-Forwarded-For` / `127.0.0.1/8,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` — محلی **خاموش** بماند تا هدر قابل جعل نباشد؛ روی Render/پشت CDN `true` (و اگر پروکسی آدرس عمومی دارد، باید در `TRUSTED_PROXIES` باشد) |
+| `ORDER_EXPIRY` | `30m` — سفارش پرداخت‌نشده بعد از این مدت لغو و موجودی/کوپن آزاد می‌شود؛ `0` خاموش می‌کند |
 | `ZARINPAL_SANDBOX` | `true` |
-| `SMS_TEST_MODE` | `true` |
+| `SMS_TEST_MODE` | محلی `true` (کد در پاسخ API) — پیش‌فرض خودش `false` است و production با `true` بالا نمی‌آید |
 | `ZARINPAL_CALLBACK_URL` | `http://localhost:5173/payment/callback` |
 | `ZARINPAL_RESULT_URL` | `http://localhost:5173/payment/result` |
+| `ADMIN_PASSWORD` | در `backend/.env` مقدار دارد؛ **هیچ پیش‌فرضی در کد نیست** |
 
 ### استقرار روی Render
 

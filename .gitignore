@@ -42,3 +42,17 @@ frontend/uploads/
 
 # ---- OpenCode local state ----
 .opencode/.cache/
+
+# ---- Local scratch ----
+# zz-fe-test.cmd is an abandoned helper from a crashed tooling run: its file
+# permissions deny read/write to the signed-in user, so it cannot be deleted
+# from this checkout. Ignoring it keeps `git add -A` clean. It is safe to
+# remove by hand once the directory is re-created (or from an elevated shell).
+scripts/zz-*.cmd
+scripts/_acl*.cmd
+scripts/_proc*.cmd
+scripts/_gs.cmd
+scripts/_stage.cmd
+scripts/_checks.cmd
+scripts/acl-report-*.jsonl
+

@@ -38,7 +38,7 @@ func main() {
 		log.Fatal().Err(err).Msg("migrate")
 	}
 
-	if err := seeder.Seed(ctx, db, cfg.Admin); err != nil {
+	if err := seeder.Seed(ctx, db, cfg.Admin, cfg.AppEnv); err != nil {
 		log.Fatal().Err(err).Msg("seed")
 	}
 }

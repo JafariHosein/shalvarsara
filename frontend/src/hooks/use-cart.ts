@@ -46,6 +46,13 @@ export interface UseCart {
   subtotal: number;
   /** True while the signed-in cart is being fetched for the first time. */
   isLoading: boolean;
+  /**
+   * True when the signed-in cart could not be fetched. Callers must not render
+   * this as "empty cart": the customer would think their cart was lost.
+   */
+  isError: boolean;
+  /** Retry the failed cart fetch. Only meaningful for a signed-in visitor. */
+  refetch: () => void;
   add: (product: Product, variant: ProductVariant | null, quantity?: number) => void;
   remove: (line: CartLine) => void;
   setQuantity: (line: CartLine, quantity: number) => void;
@@ -98,10 +105,19 @@ export function useCart(): UseCart {
       await queryClient.cancelQueries({ queryKey: CART_QUERY_KEY });
       const previous = queryClient.getQueryData<ServerCart>(CART_QUERY_KEY);
       if (previous) queryClient.setQueryData(CART_QUERY_KEY, withQuantity(previous, id, quantity));
-      return { previous };
+      // Only this line's old quantity is remembered. Restoring the whole cart
+      // snapshot would also undo a different line's mutation that succeeded in
+      // the meantime.
+      const priorQuantity = previous?.items.find((item) => item.id === id)?.quantity;
+      return { id, priorQuantity };
     },
     onError: (error, _payload, context) => {
-      if (context?.previous) queryClient.setQueryData(CART_QUERY_KEY, context.previous);
+      if (context?.priorQuantity !== undefined) {
+        const current = queryClient.getQueryData<ServerCart>(CART_QUERY_KEY);
+        if (current) {
+          queryClient.setQueryData(CART_QUERY_KEY, withQuantity(current, context.id, context.priorQuantity));
+        }
+      }
       onError(error);
     },
     onSuccess: storeCart,
@@ -128,6 +144,10 @@ export function useCart(): UseCart {
     count: lines.reduce((sum, line) => sum + line.quantity, 0),
     subtotal: lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0),
     isLoading: isAuthenticated && serverCart.isLoading,
+    isError: isAuthenticated && serverCart.isError && !serverCart.data,
+    refetch: () => {
+      if (isAuthenticated) void serverCart.refetch();
+    },
 
     add: (product, variant, quantity = 1) => {
       if (isAuthenticated) {

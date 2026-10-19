@@ -23,7 +23,7 @@ import { SmartImage } from "@/components/common/smart-image";
 import { useOrders } from "@/hooks/use-orders";
 import { errorMessage } from "@/lib/api";
 import { formatDateTime, formatNumber, formatToman, toFaDigits } from "@/lib/format";
-import { LAST_PAYMENT_KEY, type StoredPaymentStart } from "@/lib/payment-session";
+import { writeLastPayment } from "@/lib/payment-session";
 import { paymentService } from "@/services/payments";
 import { type Order } from "@/types/api";
 
@@ -159,15 +159,9 @@ function OrderCard({ order }: { order: Order }) {
   const pay = useMutation({
     mutationFn: () => paymentService.start(order.id),
     onSuccess: (start) => {
-      const stored: StoredPaymentStart = {
-        paymentId: start.paymentId,
-        orderId: start.orderId,
-        orderCode: start.orderCode,
-        authority: start.authority,
-        amountRial: start.amountRial,
-        sandbox: start.sandbox,
-      };
-      sessionStorage.setItem(LAST_PAYMENT_KEY, JSON.stringify(stored));
+      // Guarded write: a storage failure must not abort the redirect, or the
+      // customer would be left on this page with the order already created.
+      writeLastPayment(start);
       window.location.assign(start.gatewayUrl);
     },
     onError: (error) => toast.error(errorMessage(error)),

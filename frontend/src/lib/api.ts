@@ -45,16 +45,22 @@ export type QueryValue = string | number | boolean | undefined | null;
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** A JSON-serializable value, or FormData for a multipart upload. */
   body?: unknown;
   /** Attach the access token and transparently refresh it on 401. */
   auth?: boolean;
   query?: Record<string, QueryValue>;
   signal?: AbortSignal;
+  /** Set by the 401 handler so the replay cannot recurse into another refresh. */
+  retried?: boolean;
 }
 
 interface RefreshResponse {
   tokens: { accessToken: string; refreshToken: string };
 }
+
+/** How long a token refresh may take before the session is abandoned. */
+const REFRESH_TIMEOUT_MS = 10_000;
 
 // A single in-flight refresh is shared, so ten parallel 401s trigger one call.
 let refreshInFlight: Promise<string | null> | null = null;
@@ -72,10 +78,14 @@ async function performRefresh(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
+    // Without a timeout a refresh that never settles (a dead socket, a captive
+    // portal) would park every request queued behind it on a spinner forever,
+    // because the promise is shared by all of them.
     const response = await fetch(`${BASE}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ refreshToken }),
+      signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
     });
     if (!response.ok) return null;
 
@@ -108,10 +118,16 @@ function parseJson(text: string): unknown {
 
 /** Core request helper. Throws ApiError for any non-2xx response. */
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, auth = false, query, signal } = options;
+  const { method = "GET", body, auth = false, query, signal, retried = false } = options;
+
+  // FormData has to be passed through untouched: the browser sets its own
+  // Content-Type with the multipart boundary, and `JSON.stringify(new FormData())`
+  // is the string "{}" — which would silently upload an empty object instead of
+  // the file.
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
 
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
 
   const token = getAccessToken();
   if (auth && token) headers.Authorization = `Bearer ${token}`;
@@ -122,7 +138,12 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
       method,
       headers,
       signal,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : isFormData
+            ? (body as FormData)
+            : JSON.stringify(body),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
@@ -130,9 +151,18 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
 
   // Expired access token: refresh once, then replay the original request.
+  //
+  // The `retried` guard matters: if the fresh token is rejected too (a proxy
+  // stripping the header, a base URL pointing at another deployment), an
+  // unguarded replay would start a new refresh on every attempt and recurse
+  // until the server's rate limiter stepped in.
   if (response.status === 401 && auth) {
+    if (retried) {
+      clearTokens();
+      throw new ApiError(401, "unauthorized", "نشست شما منقضی شده است. لطفاً دوباره وارد شوید.");
+    }
     const fresh = await refreshAccessToken();
-    if (fresh) return api<T>(path, { ...options, auth: true });
+    if (fresh) return api<T>(path, { ...options, auth: true, retried: true });
     clearTokens();
   }
 
@@ -169,6 +199,10 @@ export const http = {
 
   delete: <T>(path: string, options: Omit<RequestOptions, "method" | "body"> = {}) =>
     api<T>(path, { ...options, method: "DELETE" }),
+
+  /** Multipart upload: the browser sets Content-Type and the boundary. */
+  upload: <T>(path: string, form: FormData, options: Omit<RequestOptions, "method" | "body"> = {}) =>
+    api<T>(path, { ...options, method: "POST", body: form }),
 };
 
 /** Human-readable message for any thrown value. */
