@@ -40,6 +40,13 @@ logs/
 backend/uploads/
 frontend/uploads/
 
+# ---- Build/transfer artifacts ----
+# The handover zip produced for testers is a snapshot of this very repository,
+# so committing it would duplicate the whole tree inside itself.
+*.zip
+*.tar
+*.tar.gz
+
 # ---- OpenCode local state ----
 .opencode/.cache/
 
