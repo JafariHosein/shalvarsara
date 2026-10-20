@@ -40,7 +40,10 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-shalvarsara}:${POSTGRES_PASSWORD:-shalvarsara}@db:5432/${POSTGRES_DB:-shalvarsara}?sslmode=disable
       RUN_MIGRATIONS: "true"
-      SEED_ON_START: "false"
+      # Toggleable from the root .env. It must be interpolated rather than
+      # hardcoded, because anything under `environment:` wins over `env_file`,
+      # so a literal "false" here would silently ignore SEED_ON_START=true.
+      SEED_ON_START: "${SEED_ON_START:-false}"
     depends_on:
       db:
         condition: service_healthy

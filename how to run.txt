@@ -1,0 +1,477 @@
+================================================================================
+ SHALVARSARA (شلوارسرا) — HOW TO RUN
+ Step-by-step instructions to get the project running and verified.
+================================================================================
+
+Persian RTL e-commerce site selling trousers only.
+  Backend : Go 1.23 + Fiber v2 + pgx v5 + PostgreSQL 16
+  Frontend: React 18 + TypeScript + Vite 5 + Tailwind + shadcn/ui
+  Money   : integer Toman everywhere (Rial only at the gateway boundary)
+
+
+--------------------------------------------------------------------------------
+ 0. PREREQUISITES
+--------------------------------------------------------------------------------
+
+Install these first. The versions listed are what the project is built and tested
+against.
+
+  [ ] Go 1.23 or newer                        https://go.dev/dl/
+  [ ] Node.js 20 or newer (22 recommended)    https://nodejs.org/
+  [ ] PostgreSQL 16                           https://www.postgresql.org/download/
+  [ ] Git
+
+Optional:
+  [ ] Docker Desktop  — only for the all-in-one route in section 9
+  [ ] make            — the Makefile targets are shortcuts for the commands below
+
+Check they are on your PATH:
+
+    go version
+    node --version
+    npm --version
+    psql --version
+
+Two platform notes that cause most first-run problems:
+
+  * WINDOWS: Go is often installed but not on PATH. If `go version` fails, open a
+    new terminal, or prefix each command with:
+        set "PATH=C:\Program Files\Go\bin;%PATH%"          (cmd)
+        $env:Path = "C:\Program Files\Go\bin;" + $env:Path  (PowerShell)
+
+  * POWERSHELL BLOCKS npm: running `npm ...` gives
+    "npm.ps1 cannot be loaded because running scripts is disabled".
+    Run npm through cmd instead:   cmd /c "npm run dev"
+
+  * TYPING COMMANDS: the code blocks below are written for cmd.exe. From
+    PowerShell most of them work unchanged, but `set VAR=value` becomes
+    `$env:VAR = "value"`, and `copy`/`del` behave slightly differently. When in
+    doubt, run them in a plain command prompt (cmd).
+
+
+--------------------------------------------------------------------------------
+ 1. GET THE CODE
+--------------------------------------------------------------------------------
+
+    git clone https://github.com/JafariHosein/shalvarsara.git
+    cd shalvarsara
+
+Every command from here on is run from the repository root unless stated
+otherwise. The two apps live in backend/ and frontend/.
+
+
+--------------------------------------------------------------------------------
+ 2. START POSTGRESQL
+--------------------------------------------------------------------------------
+
+Pick ONE of the two options.
+
+--- Option A: Docker (simplest) -------------------------------------------------
+
+    docker compose up -d db
+
+This starts PostgreSQL 16 on 127.0.0.1:5432 with user/password/database all set
+to "shalvarsara". Skip to step 3.
+
+--- Option B: native PostgreSQL install ----------------------------------------
+
+Make sure the PostgreSQL service is running, then create the role, the database
+and the pg_trgm extension the schema needs:
+
+    powershell -ExecutionPolicy Bypass -File scripts/dev-db.ps1
+
+It uses the superuser "postgres"/"postgres" by default. If yours differs:
+
+    powershell -ExecutionPolicy Bypass -File scripts/dev-db.ps1 `
+        -SuperUser postgres -SuperPassword YOURPASSWORD `
+        -PgBin "C:\Program Files\PostgreSQL\16\bin"
+
+The script is safe to re-run: it reports "already exists" instead of failing.
+
+Verify you can connect:
+
+    psql "postgres://shalvarsara:shalvarsara@localhost:5432/shalvarsara?sslmode=disable" -c "select 1"
+
+
+--------------------------------------------------------------------------------
+ 3. CREATE THE BACKEND ENVIRONMENT FILE
+--------------------------------------------------------------------------------
+
+The API reads its settings from backend/.env (it loads the .env sitting in its
+own working directory, so the one at the repository root does NOT apply here).
+
+    cd backend
+    cp .env.example .env        # Windows: copy .env.example .env
+
+  *** IMPORTANT — THE API WILL NOT START UNTIL YOU DO THE NEXT STEP ***
+  *** The JWT secrets shipped in .env.example are published in the repo, so   ***
+  *** the config loader rejects them on purpose.                              ***
+
+Generate two real secrets (run from the repository root):
+
+    powershell -ExecutionPolicy Bypass -File scripts/gen-secrets.ps1
+
+(PowerShell 7 users can use `pwsh -File scripts/gen-secrets.ps1` instead; the
+`powershell` command ships with Windows and always works.)
+
+It prints two lines. Paste them over the JWT_ACCESS_SECRET and
+JWT_REFRESH_SECRET lines in backend/.env. Both must be at least 32 characters
+and must differ from each other.
+
+While you are in backend/.env, confirm these values for local development:
+
+    APP_ENV=development
+    HTTP_PORT=8080
+    DATABASE_URL=postgres://shalvarsara:shalvarsara@localhost:5432/shalvarsara?sslmode=disable
+    CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+    RUN_MIGRATIONS=true
+    SEED_ON_START=false
+    TRUST_PROXY_HEADER=false        <- keep false locally (see section 8)
+    SMS_TEST_MODE=true              <- shows the sign-up SMS code on screen
+    ADMIN_EMAIL=admin@example.com
+    ADMIN_PASSWORD=Admin@12345      <- change this; there is no default in code
+
+Notes:
+  * SMS_TEST_MODE=true is what makes local sign-up testable without an SMS
+    provider: the API returns the verification code and the register page shows
+    it. In production this must be false or the API refuses to boot.
+  * ADMIN_PASSWORD has no fallback in the code. If you leave it empty the seeder
+    skips creating the admin account and logs a warning (in production it is a
+    hard startup error).
+
+backend/.env is gitignored. Never commit it.
+
+
+--------------------------------------------------------------------------------
+ 4. INSTALL DEPENDENCIES
+--------------------------------------------------------------------------------
+
+Backend:
+
+    cd backend
+    go mod download
+
+Frontend:
+
+    cd frontend
+    cmd /c "npm ci"          # or: cmd /c "npm install"
+
+(The frontend needs no .env: a missing VITE_API_BASE_URL defaults to the
+relative "/api/v1", which the Vite dev server proxies to the API. See section 8
+if you want to point it somewhere else.)
+
+
+--------------------------------------------------------------------------------
+ 5. CREATE THE SCHEMA AND DEMO DATA
+--------------------------------------------------------------------------------
+
+From the backend directory:
+
+    go run ./cmd/seed
+
+This applies every pending migration and then seeds:
+
+  * 3 categories
+  * 50 trousers, each with gallery images and size/colour variants
+  * 2 coupons: WELCOME10 and OFF50000
+  * reviews spread across the catalogue, written by a handful of generated
+    customer accounts — most are approved, roughly one in seven is left pending
+    so the admin moderation screen has something to show (the exact number is
+    randomised per run)
+  * one delivered order for the demo customer, so writing a review is testable
+  * the admin account from backend/.env
+
+It is idempotent: users and categories are updated in place, and any section
+that already has data is skipped.
+
+To run migrations on their own (also useful later, after pulling changes):
+
+    go run ./cmd/migrate                 # apply everything pending
+    go run ./cmd/migrate up              # same thing
+    go run ./cmd/migrate down            # reverse the newest migration (DESTRUCTIVE)
+    go run ./cmd/migrate down 3          # reverse the newest three
+    go run ./cmd/migrate down all        # reverse everything
+
+
+--------------------------------------------------------------------------------
+ 6. RUN IT
+--------------------------------------------------------------------------------
+
+Open TWO terminals. Leave both running.
+
+--- Terminal 1: the API ---------------------------------------------------------
+
+    cd backend
+    go run ./cmd/api
+
+Wait for:
+
+    INF migrations up to date
+    INF API listening addr=:8080 env=development
+
+--- Terminal 2: the storefront --------------------------------------------------
+
+    cd frontend
+    cmd /c "npm run dev"
+
+Wait for:
+
+    VITE v5.x  ready in ... ms
+    ➜  Local:   http://localhost:5173/
+
+Then open http://localhost:5173
+
+Any Go change needs the API restarted (go run does not hot-reload). The frontend
+hot-reloads on save.
+
+
+--------------------------------------------------------------------------------
+ 7. WHAT TO OPEN, AND THE LOGIN ACCOUNTS
+--------------------------------------------------------------------------------
+
+    Storefront        http://localhost:5173
+    Admin panel       http://localhost:5173/admin
+    API base          http://localhost:8080/api/v1
+    Liveness probe    http://localhost:8080/api/v1/health
+    Readiness (DB)    http://localhost:8080/api/v1/health/ready
+
+    Admin     admin@example.com    / Admin@12345       (from backend/.env)
+    Customer  customer@example.com / Customer@12345    (seeded demo account)
+
+Sign-up needs a mobile number and a verification code. With SMS_TEST_MODE=true
+the code is displayed on the register page, so no SMS provider is required.
+
+The cart is server-side once you are signed in; as a guest it lives in the
+browser and is merged into your account when you sign in.
+
+Payments run against the ZarinPal SANDBOX (ZARINPAL_SANDBOX=true). No real money
+moves. The sandbox accepts any UUID as the merchant id.
+
+
+--------------------------------------------------------------------------------
+ 8. CONFIGURATION YOU MAY NEED TO CHANGE
+--------------------------------------------------------------------------------
+
+Pointing the frontend at a different API
+  Create frontend/.env with:
+
+        VITE_API_BASE_URL=http://127.0.0.1:8080/api/v1
+
+  Vite bakes this in at build time, so restart (dev) or rebuild (production)
+  after changing it. It also accepts a bare host, and appends "/api/v1" if you
+  leave the suffix off.
+
+Use 127.0.0.1, not localhost
+  On Windows, "localhost" often resolves to ::1 (IPv6) first, while the Go
+  server listens on IPv4 only. Prefer 127.0.0.1 in any URL you type. The Vite
+  proxy is already configured for 127.0.0.1.
+
+TRUST_PROXY_HEADER
+  Keep it false locally. It only belongs on when a proxy or CDN (Render, Arvan,
+  nginx) sits in front of the API; the rate limiter then reads the real visitor
+  address from X-Forwarded-For, and only from peers listed in TRUSTED_PROXIES.
+  With it on and no proxy, a client could spoof the header and get a fresh rate
+  limit bucket per request.
+
+ORDER_EXPIRY
+  An unpaid order keeps its reserved stock for this long (default 30m) before a
+  background sweeper cancels it and returns the stock and coupon use to the
+  pool. Set 0 to disable the sweeper.
+
+Ports already in use
+  API:      set HTTP_PORT in backend/.env
+  Frontend: change `server.port` in frontend/vite.config.ts
+  Postgres: set POSTGRES_PORT before `docker compose up -d db`
+
+
+--------------------------------------------------------------------------------
+ 9. ALL-IN-ONE WITH DOCKER (optional)
+--------------------------------------------------------------------------------
+
+Builds and runs the database, the API and the storefront together.
+
+    cp .env.example .env        # Windows: copy .env.example .env
+    docker compose up -d --build
+
+The root .env is read by docker compose (it has a working default, so a missing
+file is not fatal). The API container gets RUN_MIGRATIONS=true automatically.
+
+The seed does not run automatically in this route, because the API image ships
+only the compiled API binary (there is no seed binary inside the container). Two
+ways to load the demo data, pick ONE:
+
+  a) Seed from the host. The database port is published on 127.0.0.1:5432, so
+     the regular seed command works against the containerised database:
+
+         cd backend && go run ./cmd/seed
+
+  b) Let the API seed itself on start. Put this line in the root .env:
+
+         SEED_ON_START=true
+
+     and restart the backend container:
+
+         docker compose up -d backend
+
+     It is idempotent, so it is safe to leave on, but the first start is slower
+     while it inserts the demo catalogue.
+
+Do NOT run `docker compose exec backend /app/api` to seed: the entrypoint is
+the API server, so that just starts a second copy of it.
+
+    Storefront  http://localhost:5173
+    API         http://localhost:8080/api/v1
+
+Note: the frontend image bakes VITE_API_BASE_URL at build time. To serve it from
+a different host, change the build arg in docker-compose.yml and rebuild.
+
+Logs and shutdown:
+
+    docker compose logs -f
+    docker compose down          # stop, keep data
+    docker compose down -v       # stop AND DELETE the database volume
+
+
+--------------------------------------------------------------------------------
+10. VERIFY EVERYTHING (recommended before committing or handing over)
+--------------------------------------------------------------------------------
+
+Every check below must exit 0.
+
+Backend — build, vet, format and unit tests:
+
+    cd backend
+    go build ./...
+    go vet ./...
+    gofmt -l .              # prints nothing when clean
+    go test ./...
+
+Frontend — typecheck, tests and production build:
+
+    cd frontend
+    cmd /c "npm run typecheck"
+    cmd /c "npm run test"        # 225 tests
+    cmd /c "npm run build"       # runs tsc, then bundles
+
+Scripted shortcuts that write their output to %TEMP% (Windows):
+
+    scripts\check-backend.cmd          -> %TEMP%\check.txt
+    scripts\check-frontend-full.cmd    -> %TEMP%\fetest.txt
+    scripts\db-verify.cmd              -> %TEMP%\dbcheck.txt
+    scripts\fmt-backend.cmd            -> %TEMP%\fmt.txt
+
+Checks that need the API running (start it first, see section 6), then:
+
+    set ADMIN_PASSWORD=Admin@12345       (PowerShell: $env:ADMIN_PASSWORD="...")
+    powershell -ExecutionPolicy Bypass -File scripts\verify-fixes2.ps1
+    powershell -ExecutionPolicy Bypass -File scripts\verify-patch.ps1
+
+Those two log to %TEMP%\verify2.txt and %TEMP%\patchtest.txt. They read the
+admin password from the environment on purpose, so no password is committed.
+
+Migration up/down round trip, on a throwaway database:
+
+    scripts\verify-rollback.cmd
+
+Note: `go test -race` needs a C compiler (CGO). On Windows without gcc it fails
+to build with "runtime/cgo: C compiler not found". CI runs it on Linux.
+
+
+--------------------------------------------------------------------------------
+11. STOPPING
+--------------------------------------------------------------------------------
+
+    Ctrl+C            in each terminal running go run / npm run dev
+    scripts\stop-api.cmd      kills whatever is listening on the API port
+                              (set HTTP_PORT first to override 8080)
+    docker compose down       stops the Docker route (add -v to erase the data)
+
+
+--------------------------------------------------------------------------------
+12. TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+"config: JWT_ACCESS_SECRET still holds the example value from .env.example"
+  You copied backend/.env.example but did not replace the secrets. Run
+  scripts/gen-secrets.ps1 and paste the two values in. This check is deliberate:
+  those values are public in the repository, so accepting them would let anyone
+  mint an admin token.
+
+"config: JWT secrets must be at least 32 characters"
+  Shorten nothing — generate proper ones with the script above.
+
+"config: ADMIN_PASSWORD is required when SEED_ON_START is on in production"
+  APP_ENV is production and ADMIN_PASSWORD is empty. Set it, or unset
+  SEED_ON_START.
+
+"config: SMS_TEST_MODE must be false in production"
+  APP_ENV=production requires a real SMS provider. Set SMS_TEST_MODE=false.
+
+"config: TRUST_PROXY_HEADER is on but TRUSTED_PROXIES is empty"
+  TRUST_PROXY_HEADER is true but TRUSTED_PROXIES contains no usable entry.
+  Fill in the CIDRs of the proxies allowed to set the header (for example
+  127.0.0.1/8,::1,10.0.0.0/8), or turn TRUST_PROXY_HEADER off. Leaving
+  TRUSTED_PROXIES blank is not the same as emptying it: a blank value falls back
+  to the built-in default, so this error only appears when the variable is set
+  to something with no entries in it (such as a lone ",").
+
+API exits with "connect database" or "dial tcp ... connection refused"
+  PostgreSQL is not running, or DATABASE_URL is wrong. Section 2. Use 127.0.0.1
+  rather than localhost if the name resolves to IPv6.
+
+API says "migrations up to date" but the storefront is empty
+  The schema exists but no data does. Run `go run ./cmd/seed` (section 5).
+
+Frontend loads but every request fails / the page is blank
+  The API is not reachable. Check http://127.0.0.1:8080/api/v1/health in the
+  browser, then check VITE_API_BASE_URL (section 8).
+
+Three net::ERR_ABORTED requests in the console on each page load
+  Expected, not a bug. React StrictMode runs every effect twice in development
+  and TanStack Query cancels the first request. The second one gets a 200. It
+  does not happen in a production build.
+
+"npm.ps1 cannot be loaded because running scripts is disabled"
+  PowerShell execution policy. Use cmd /c "npm ..." (section 0).
+
+"port 8080 already in use"
+  Something is still running from an earlier session:
+      scripts\stop-api.cmd
+  or find it with:
+      netstat -ano | findstr :8080
+
+Sign-up says the code was sent but nothing arrives
+  SMS_TEST_MODE is false, so no SMS provider is connected. Set it to true in
+  backend/.env for local development; the code appears on the register page.
+
+Admin panel returns 403
+  You are signed in as the demo customer. Log out and sign in as the admin
+  account.
+
+Images are missing for a product
+  Image URLs are stored as app-relative paths such as /products/denim-1.webp and
+  served from frontend/public/products/. If you replaced the catalogue, check
+  that product_images.url still points at a file that exists.
+
+Console shows mojibake for Persian text
+  The Windows console encoding, not the data. Write output to a file and read it,
+  or use Windows Terminal.
+
+
+--------------------------------------------------------------------------------
+13. WHERE TO GO NEXT
+--------------------------------------------------------------------------------
+
+    README.md      project overview, full API reference, environment variables
+    PROGRESS.md    what is done, what is next, known issues, environment traps
+    DEPLOY-ARVAN.md how the live site is published (Render behind Arvan CDN)
+    render.yaml    the three production services
+    Makefile       shortcuts for most commands in this file
+
+Useful directories:
+
+    backend/migrations/   the SQL migrations, applied in filename order
+    backend/cmd/          api, seed, migrate and two developer tools
+    frontend/src/         pages, components, hooks, services, stores and tests
+    scripts/              the verification and setup scripts used above
+    .github/workflows/    CI (see the note at the top of that file)
