@@ -309,7 +309,7 @@ ways to load the demo data, pick ONE:
 
          SEED_ON_START=true
 
-     and restart the backend container:
+     then restart the backend container:
 
          docker compose up -d backend
 
